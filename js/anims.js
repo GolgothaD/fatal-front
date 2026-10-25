@@ -7,9 +7,9 @@ const P=(o)=>Object.assign({hip:[0,-47],lean:4,head:0,f1:[-9,0],f2:[10,0],h1:[9,
 const seq=(keys,n)=>{const out=[];for(let i=0;i<keys.length-1;i++)for(let j=0;j<n;j++)out.push(lerpP(keys[i],keys[i+1],j/n));out.push(keys[keys.length-1]);return out};
 const A={};
 // ---------- FIGHT ----------
-A.idle={fps:7,loop:1,f:[0,1,2,3,2,1].map(i=>{const b=[0,0.8,1.6,2][i];return P({hip:[0,-47+b],h1:[9,-71+b*1.2],h2:[15,-77+b*1.1],head:-b,hairX:-b*0.8,hairY:b})})};
-A.walk={fps:10,loop:1,f:[0,1,2,3,4,5].map(i=>{const a=i/6*Math.PI*2,s=Math.sin(a),c=Math.cos(a);return P({hip:[0,-47+Math.abs(c)*1.5],f1:[-2+s*-11,Math.min(0,-c*6)],f2:[3+s*11,Math.min(0,c*6)],h1:[8+s*2,-71],h2:[15-s*2,-77],hairX:-2})})};
-A.walkb={fps:9,loop:1,f:[...A.walk.f].reverse()};
+A.idle={fps:9,loop:1,f:[0,0.5,1,1.5,2,1.5,1,0.5].map(b=>{return P({hip:[0,-47+b],h1:[9,-71+b*1.2],h2:[15,-77+b*1.1],head:-b,hairX:-b*0.8,hairY:b})})};
+A.walk={fps:13,loop:1,f:[0,1,2,3,4,5,6,7].map(i=>{const a=i/8*Math.PI*2,s=Math.sin(a),c=Math.cos(a);return P({hip:[0,-47+Math.abs(c)*1.5],f1:[-2+s*-11,Math.min(0,-c*6)],f2:[3+s*11,Math.min(0,c*6)],h1:[8+s*2,-71],h2:[15-s*2,-77],hairX:-2})})};
+A.walkb={fps:12,loop:1,f:[...A.walk.f].reverse()};
 const crouch=P({hip:[1,-30],lean:16,f1:[-12,0],f2:[12,0],h1:[11,-54],h2:[17,-59],head:-8});
 A.crouch={fps:20,loop:0,f:seq([P({}),crouch],2)};
 const tuck=P({hip:[0,-52],lean:20,f1:[-4,-24],f2:[6,-28],h1:[10,-62],h2:[14,-58],kb1:-1,kb2:-1,hairX:-5,hairY:4});
@@ -46,9 +46,9 @@ function aimP(a,base){const c=Math.cos(a*Math.PI/180),s=Math.sin(a*Math.PI/180);
  return Object.assign(base,{h2:[sh[0]+c*21,sh[1]+s*21+3],h1:[sh[0]+c*12-s*3,sh[1]+s*12+c*3+4],gun:a,eb1:1,eb2:1})}
 const AIMS={f:0,uf:-45,u:-90,df:40,d:90};
 for(const k in AIMS){A['aim_'+k]={fps:1,loop:0,f:[aimP(AIMS[k],P({lean:k==='u'?-4:2,f1:[-10,0],f2:[10,0],hip:[0,-48],head:AIMS[k]*0.15}))]}}
-for(const k of['f','uf','df']){A['run_'+k]={fps:12,loop:1,f:[0,1,2,3,4,5].map(i=>{const a=i/6*Math.PI*2,s=Math.sin(a),c=Math.cos(a);
+for(const k of['f','uf','df']){A['run_'+k]={fps:16,loop:1,f:[0,1,2,3,4,5,6,7].map(i=>{const a=i/8*Math.PI*2,s=Math.sin(a),c=Math.cos(a);
   return aimP(AIMS[k],P({hip:[2,-47+Math.abs(c)*2],lean:10,f1:[-2+s*-15,Math.min(0,-c*9)],f2:[5+s*15,Math.min(0,c*9)],hairX:-4}))})}}
 A.prone={fps:1,loop:0,f:[aimP(-90,P({hip:[0,-47],lean:0,f1:[-3,0],f2:[3,0],head:85,rot:90,ground:1}))]};
 A.die={fps:9,loop:0,f:[P({lean:-30,head:-20,hip:[-4,-48],f1:[-6,-6],f2:[10,-14],h1:[-14,-84],h2:[4,-92],rot:-40,ground:1}),P({lean:-20,f1:[-4,-6],f2:[8,-10],h1:[-14,-96],h2:[2,-100],rot:-75,ground:1}),lie]};
-A.runplain={fps:12,loop:1,f:A.walk.f.map(p=>Object.assign({},p,{lean:12,f1:[p.f1[0]*1.4,p.f1[1]*1.4],f2:[p.f2[0]*1.4,p.f2[1]*1.4],h1:[p.h1[0]-6,p.h1[1]+8],h2:[p.h2[0]+6,p.h2[1]+6]}))};
+A.runplain={fps:16,loop:1,f:A.walk.f.map(p=>Object.assign({},p,{lean:12,f1:[p.f1[0]*1.4,p.f1[1]*1.4],f2:[p.f2[0]*1.4,p.f2[1]*1.4],h1:[p.h1[0]-6,p.h1[1]+8],h2:[p.h2[0]+6,p.h2[1]+6]}))};
 return{A,lerpP,AIMS}})();

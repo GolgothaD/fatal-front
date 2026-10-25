@@ -22,7 +22,7 @@ const STAGES={
 function seeded(s){return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
 const Run={
  start(cfg){// cfg:{stage, players:[{pl,id,lives,score}], onEnd}
-  const R=this;R.cfg=cfg;R.n=cfg.stage;R.S=STAGES[cfg.stage];R.L=R.S.len;R.t=0;R.cx=0;R.lock=null;R.ground=[];R.plats=[];R.spawns=[];R.en=[];R.pb=[];R.eb=[];R.items=[];R.decor=[];R.dead=false;R.done=0;R.over=0;R.endT=0;R.msg=[];R.bg=IMG['bg'+cfg.stage];
+  const R=this;R.cfg=cfg;R.n=cfg.stage;R.S=STAGES[cfg.stage];R.L=R.S.len;R.t=0;R.cx=0;R.lock=null;R.ground=[];R.plats=[];R.spawns=[];R.en=[];R.pb=[];R.eb=[];R.items=[];R.decor=[];R.dead=false;R.done=0;R.over=0;R.endT=0;R.msg=[];R.bg=IMG['bgh'+cfg.stage]||IMG['bg'+cfg.stage];
   R.build();R.mkTiles();R.mkMid();
   R.pl=cfg.players.map((p,i)=>R.newPlayer(p,40+i*24));
   AU.playMusic(R.S.mus);R.say('STAGE '+R.n,0,90,2);R.say(R.S.name,0,90,1,118);AU.vo('stage');setTimeout(()=>AU.vo('go'),1300);
@@ -230,7 +230,7 @@ const Run={
   g.fillStyle=R.S.sky;g.fillRect(0,0,VW,VH);
   if(R.bg){const f=(R.bg.width-320)/Math.max(1,R.L-320);g.drawImage(R.bg,-Math.round(R.cx*f),cy-8)}
   // mid parallax
-  const mx=-Math.round(cx*0.45)%320;g.globalAlpha=0.92;g.drawImage(R.mid,mx,cy);g.drawImage(R.mid,mx+320,cy);g.globalAlpha=1;
+  const mx=-Math.round(cx*0.45)%320;g.globalAlpha=0.8;g.drawImage(R.mid,mx,cy);g.drawImage(R.mid,mx+320,cy);g.globalAlpha=0.16;g.fillStyle='#7080a0';g.fillRect(0,0,VW,VH);g.globalAlpha=1;
   // decor (towers)
   for(const d of R.decor){if(d.x<cx-40||d.x>cx+360)continue;const x=d.x-cx;g.fillStyle='#2a1e14';g.fillRect(x-14,d.y+cy,3,240);g.fillRect(x+11,d.y+cy,3,240);for(let y=d.y+10;y<240;y+=14){g.fillRect(x-14,y+cy,28,2)}}
   // ground
@@ -245,7 +245,7 @@ const Run={
   // enemies
   for(const e of R.en)R.drawEnemy(g,e,cx,cy);
   // items
-  for(const it of R.items){const x=Math.round(it.x-cx),y=Math.round(it.y+cy);g.fillStyle='#000';g.fillRect(x-7,y-6,14,12);g.fillStyle=it.t%16<8?'#e02020':'#ff6040';g.fillRect(x-6,y-5,12,10);g.fillStyle='#ffd040';g.fillRect(x-6,y-5,12,2);txt(g,it.k,x-2,y-3,'#fff',{sh:false})}
+  for(const it of R.items){const x=Math.round(it.x-cx),y=Math.round(it.y+cy);const pu=0.5+0.5*Math.sin(it.t*0.2);glow(g,x,y,13+pu*4,'#ffd040',0.22+pu*0.18);g.fillStyle='#fff';g.fillRect(x-9,y-8,18,16);g.fillStyle='#000';g.fillRect(x-8,y-7,16,14);g.fillStyle=it.t%16<8?'#e02020':'#ff5030';g.fillRect(x-7,y-6,14,12);g.fillStyle='#ffd040';g.fillRect(x-7,y-6,14,2);g.fillStyle='#8a0808';g.fillRect(x-7,y+4,14,2);txt(g,it.k,x-2,y-3,'#fff',{shc:'#400000'})}
   // players
   for(const p of R.pl){if(!p.alive)continue;if(p.inv>0&&!p.dead&&R.t%4<2)continue;const A=ANIM.A[p.anim];const fi=A.loop?Math.floor(p.at/60*A.fps)%A.f.length:Math.min(A.f.length-1,Math.floor((p.dead?p.dead:p.at)/60*A.fps));
    const s=SPR.render(p.id,A.f[fi],PS,p.face<0,p.anim+fi);const x=Math.round(p.x-cx-s.ox),y=Math.round(p.y+cy-s.oy+(p.anim=='flip'?-8:0));g.drawImage(s.c,x,y);
@@ -253,15 +253,15 @@ const Run={
   // bullets
   for(const b of R.pb){const x=Math.round(b.x-cx),y=Math.round(b.y+cy);if(b.laser){g.strokeStyle='#40c0ff';g.lineWidth=3;g.beginPath();g.moveTo(x-b.vx*2.2,y-b.vy*2.2);g.lineTo(x+b.vx*0.6,y+b.vy*0.6);g.stroke();g.strokeStyle='#e0faff';g.lineWidth=1;g.stroke();continue}
    if(b.gren){g.fillStyle='#000';g.fillRect(x-3,y-3,6,6);g.fillStyle='#4a6a2a';g.fillRect(x-2,y-2,4,4);continue}
-   const r=Math.ceil(b.r);g.fillStyle=b.fire?'#a02008':'#000';g.fillRect(x-r-1,y-r,r*2+2,r*2);g.fillRect(x-r,y-r-1,r*2,r*2+2);g.fillStyle=b.col;g.fillRect(x-r,y-r,r*2,r*2);g.fillStyle='#fff';g.fillRect(x-Math.max(1,r-1)+0,y-Math.max(1,r-1),Math.max(1,r-1),Math.max(1,r-1))}
-  for(const b of R.eb){const x=Math.round(b.x-cx),y=Math.round(b.y+cy);if(b.gren){g.fillStyle='#000';g.fillRect(x-3,y-3,6,6);g.fillStyle=b.mortar?'#8a8a8a':'#3a3a2a';g.fillRect(x-2,y-2,4,4);continue}g.fillStyle=R.t%6<3?'#ffffff':'#ff70a0';g.fillRect(x-2,y-1,4,3);g.fillRect(x-1,y-2,2,5)}
+   const r=Math.ceil(b.r);glow(g,x,y,r*3.2,b.col,0.5);g.strokeStyle=b.col;g.globalAlpha=0.55;g.lineWidth=r;g.beginPath();g.moveTo(x-b.vx*1.6,y-b.vy*1.6);g.lineTo(x,y);g.stroke();g.globalAlpha=1;g.fillStyle=b.fire?'#a02008':'#000';g.fillRect(x-r-1,y-r,r*2+2,r*2);g.fillRect(x-r,y-r-1,r*2,r*2+2);g.fillStyle=b.col;g.fillRect(x-r,y-r,r*2,r*2);g.fillStyle='#fff';g.fillRect(x-r+0.5,y-r+0.5,r*2-1,r*2-1)}
+  for(const b of R.eb){const x=Math.round(b.x-cx),y=Math.round(b.y+cy);if(b.gren){g.fillStyle='#000';g.fillRect(x-3,y-3,6,6);g.fillStyle=b.mortar?'#8a8a8a':'#3a3a2a';g.fillRect(x-2,y-2,4,4);continue}glow(g,x,y,8,'#ff3070',0.55);g.fillStyle='#000';g.fillRect(x-3.5,y-2.5,7,5);g.fillRect(x-2.5,y-3.5,5,7);g.fillStyle=R.t%6<3?'#ff4080':'#ff90b8';g.fillRect(x-3,y-2,6,4);g.fillRect(x-2,y-3,4,6);g.fillStyle='#fff';g.fillRect(x-1.5,y-1.5,3,3)}
   FX.draw(g,cx,-cy);
   R.hud(g);
   for(const m of R.msg){const age=R.t-m.t0;if(age<0||age>m.life)continue;if(m.sc==1)txt(g,m.s,160,m.y,'#ffe060',{a:'c'});else big(g,m.s,160,m.y-m.sc*3.5,m.sc,{sx:age<8?0.3+age/8*0.7:1,c1:'#ffffff',c2:m.s=='WARNING'?'#ff2000':'#40a0ff'})}
   if(FX.flash>0){g.globalAlpha=Math.min(1,FX.flash/8);g.fillStyle=FX.flashC;g.fillRect(0,0,VW,VH);g.globalAlpha=1}
   if(R.endT>200){g.globalAlpha=Math.min(1,(R.endT-200)/60);g.fillStyle='#000';g.fillRect(0,0,VW,VH);g.globalAlpha=1}},
  drawEnemy(g,e,cx,cy){const R=this,x=Math.round(e.x-cx),y=Math.round(e.y+cy);if(e.flash>0){e.flash--}
-  if(e.id&&(e.k=='runner'||e.k=='rifle'||e.k=='sniper'||e.k=='gren')){const A=ANIM.A[e.anim||'aim_f'];const fi=A.loop?Math.floor(e.t/60*A.fps)%A.f.length:0;const s=SPR.render(e.id,A.f[fi],PS,e.face<0,(e.anim||'aim_f')+fi);g.drawImage(s.c,x-s.ox,y-s.oy);return}
+  if(e.id&&(e.k=='runner'||e.k=='rifle'||e.k=='sniper'||e.k=='gren')){const A=ANIM.A[e.anim||'aim_f'];const fi=A.loop?Math.floor(e.t/60*A.fps)%A.f.length:0;const s=SPR.render(e.id,A.f[fi],PS,e.face<0,(e.anim||'aim_f')+fi);g.drawImage(s.c,x-s.ox,y-s.oy);if(e.flash>0){g.globalAlpha=0.9;g.drawImage(SPR.flash(s),x-s.ox,y-s.oy);g.globalAlpha=1}return}
   switch(e.k){
    case'turret':g.fillStyle='#2a2a2e';g.fillRect(x-12,y-24,24,24);g.fillStyle='#4a4a52';g.fillRect(x-10,y-22,20,20);g.fillStyle='#16161a';g.fillRect(x-8,y-20+Math.round((1-e.open)*0),16,16*e.open);
     if(e.open>0.5){g.save();g.translate(x,y-10);g.rotate(e.ang);g.fillStyle=e.flash?'#fff':'#6a6a74';g.fillRect(0,-2,13,4);g.restore();g.fillStyle=e.flash?'#fff':'#c03020';g.beginPath();g.arc(x,y-10,5,0,7);g.fill()}break;

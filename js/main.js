@@ -115,9 +115,9 @@ const Game={scene:'boot',t:0,sel:0,
  u_credits(){if(this.t>30&&(pressed('a')||pressed('start')||pressed('back')||this.tapped)){this.tapped=0;this.go('title',{sel:5})}},
  d_credits(g){g.fillStyle='#050505';g.fillRect(0,0,VW,VH);big(g,'CREDITS',160,8,3);const L=[['FATAL FRONT','#ffd040'],['AN ORIGINAL GAME BY GOLGOTHAD'],[''],['MUSIC','#ffd040'],['KEVIN MACLEOD (INCOMPETECH.COM)'],['LICENSED UNDER CC BY 4.0'],[''],['ANNOUNCER','#ffd040'],['PIPER TTS VOICE'],[''],['ART, CODE, SFX','#ffd040'],['PROCEDURAL + GENERATED ART'],[''],['NO AFFILIATION WITH ANY 90S','#888'],['ARCADE PUBLISHER. JUST LOVE.','#888']];L.forEach(([s,c],i)=>txt(g,s,160,40+i*12,c||'#ddd',{a:'c'}))},
  // ---- options ----
- OPTS:['MUSIC','SFX','VOICE','BLOOD','CRT','DIFFICULTY','EASY SPECIALS','SCREEN SHAKE','BACK'],
- optVal(k){switch(k){case'MUSIC':return SV.music;case'SFX':return SV.sfx;case'VOICE':return SV.voice;case'BLOOD':return SV.blood?'ON':'OFF';case'CRT':return['OFF','SOFT','STRONG'][SV.crt];case'DIFFICULTY':return SV.easy?'EASY':'NORMAL';case'EASY SPECIALS':return String(SV.easySpecials).toUpperCase();case'SCREEN SHAKE':return SV.shake?'ON':'OFF';default:return''}},
- optAdj(k,d){const v=x=>Math.round(clamp(x+d*0.05,0,1)*100)/100;switch(k){case'MUSIC':SV.music=v(SV.music);break;case'SFX':SV.sfx=v(SV.sfx);AU.sfx('punch1');break;case'VOICE':SV.voice=v(SV.voice);AU.vo('fight');break;case'BLOOD':SV.blood=!SV.blood;break;case'CRT':SV.crt=(SV.crt+(d>0?1:2))%3;layout();break;case'DIFFICULTY':SV.easy=!SV.easy;break;case'EASY SPECIALS':{const L=['touch','on','off'];SV.easySpecials=L[(L.indexOf(SV.easySpecials)+(d>0?1:2))%3];break}case'SCREEN SHAKE':SV.shake=!SV.shake;break}AU.applyVol();save()},
+ OPTS:['MUSIC','SFX','VOICE','BLOOD','CRT','DIFFICULTY','EASY SPECIALS','SCREEN SHAKE','TOUCH CONTROLS','BACK'],
+ optVal(k){switch(k){case'MUSIC':return SV.music;case'SFX':return SV.sfx;case'VOICE':return SV.voice;case'BLOOD':return SV.blood?'ON':'OFF';case'CRT':return['OFF','SOFT','STRONG'][SV.crt];case'DIFFICULTY':return SV.easy?'EASY':'NORMAL';case'EASY SPECIALS':return String(SV.easySpecials).toUpperCase();case'SCREEN SHAKE':return SV.shake?'ON':'OFF';case'TOUCH CONTROLS':return'EDIT >';default:return''}},
+ optAdj(k,d){const v=x=>Math.round(clamp(x+d*0.05,0,1)*100)/100;switch(k){case'MUSIC':SV.music=v(SV.music);break;case'SFX':SV.sfx=v(SV.sfx);AU.sfx('punch1');break;case'VOICE':SV.voice=v(SV.voice);AU.vo('fight');break;case'BLOOD':SV.blood=!SV.blood;break;case'CRT':SV.crt=(SV.crt+(d>0?1:2))%3;layout();break;case'DIFFICULTY':SV.easy=!SV.easy;break;case'EASY SPECIALS':{const L=['touch','on','off'];SV.easySpecials=L[(L.indexOf(SV.easySpecials)+(d>0?1:2))%3];break}case'SCREEN SHAKE':SV.shake=!SV.shake;break;case'TOUCH CONTROLS':if(d>0){AU.sfx('uisel');TC.edit(true)}return}AU.applyVol();save()},
  optsUpd(onBack){const g=this,n=g.OPTS.length;if(menuDir('u'))g.osel=((g.osel||0)+n-1)%n,AU.sfx('ui');if(menuDir('d'))g.osel=((g.osel||0)+1)%n,AU.sfx('ui');const k=g.OPTS[g.osel||0];
   if(menuDir('l'))g.optAdj(k,-1);if(menuDir('r'))g.optAdj(k,1);if(pressed('a')||pressed('x')){if(k=='BACK'){AU.sfx('uisel');onBack()}else if(!/MUSIC|SFX|VOICE/.test(k))g.optAdj(k,1)}if(pressed('back')||pressed('b')){AU.sfx('ui');onBack()}},
  optsDraw(g,y0){const T=this;T.OPTS.forEach((k,i)=>{const y=y0+i*15,s=i==(T.osel||0);if(s){g.fillStyle='#401010';g.fillRect(40,y-3,240,13)}txt(g,k,48,y,s?'#fff':'#bbb');const v=T.optVal(k);
@@ -148,14 +148,15 @@ E.onTap=e=>{const r=view.getBoundingClientRect();const x=(e.clientX-r.left)/r.wi
  g.tapped=1};
 E.canPause=()=>Game.scene=='run'||Game.scene=='duel';
 // ---- boot ----
-(async function boot(){view=document.getElementById('view');layout();setupTouch();addEventListener('resize',layout);if(screen.orientation)screen.orientation.addEventListener?.('change',()=>setTimeout(layout,50));
+(async function boot(){view=document.getElementById('view');layout();TC.init();addEventListener('resize',layout);if(screen.orientation)screen.orientation.addEventListener?.('change',()=>setTimeout(layout,50));
  if(window.visualViewport)visualViewport.addEventListener('resize',layout);
  let last=performance.now(),acc=0;const step=1000/60;
- function frame(now){acc+=Math.min(100,now-last);last=now;let n=0;while(acc>=step&&n<4){pollInput();if(E.dbg.fast){for(let i=0;i<E.dbg.fast;i++)Game.update()}else Game.update();acc-=step;n++;E.frame++}if(n)Game.draw(),present();requestAnimationFrame(frame)}
+ function frame(now){if(E.editing){last=now;acc=0;Game.draw();present();requestAnimationFrame(frame);return}acc+=Math.min(100,now-last);last=now;let n=0;while(acc>=step&&n<4){pollInput();if(E.dbg.fast){for(let i=0;i<E.dbg.fast;i++)Game.update()}else Game.update();acc-=step;n++;E.frame++}if(n)Game.draw(),present();requestAnimationFrame(frame)}
  requestAnimationFrame(frame);
  const imgs=[['title','art/title.png'],...[1,2,3,4,5,6,7].map(i=>['bg'+i,'art/bg'+i+'.png'])];
  const auds=[...SFX_LIST.map(n=>['s_'+n,'audio/sfx/'+n+'.ogg']),...VO_LIST.map(n=>['v_'+n,'audio/vo/'+n+'.ogg']),...MUS_LIST.map(n=>['m_'+n,'audio/music/'+n+'.ogg'])];
  let done=0;const tot=imgs.length+1;await Promise.all(imgs.map(([n,u])=>loadImg(n,u).then(()=>{done++;Game.loadP=done/tot})));
+ for(let i=1;i<=7;i++){const b=IMG['bg'+i];if(b){IMG['bgh'+i]=haze(b,0.55,0.7,0.8,0.2);IMG['bgd'+i]=haze(b,0.75,0.82,0.88,0.1)}}
  AU.init();await AU.load(auds,p=>{Game.loadP=(imgs.length+p)/tot});Game.loaded=true;
  if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
  // test hook

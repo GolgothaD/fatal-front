@@ -1,30 +1,41 @@
 'use strict';
 // ===== FATAL FRONT engine: screen, layout, input, audio, save, font =====
-const VW=320,VH=240;
+const VW=320,VH=240,RS=2;// RS: render supersample (logic stays 320x240, pixels are 640x480)
+// images flagged with _rs are hi-res: their natural size in logical units is width/_rs
+const _di=CanvasRenderingContext2D.prototype.drawImage;CanvasRenderingContext2D.prototype.drawImage=function(im,...a){const r=im&&im._rs;if(r){if(a.length==2)return _di.call(this,im,a[0],a[1],im.width/r,im.height/r);if(a.length==8)return _di.call(this,im,a[0]*r,a[1]*r,a[2]*r,a[3]*r,a[4],a[5],a[6],a[7])}return _di.call(this,im,...a)};
 const E={t:0,frame:0,paused:false,autoPaused:false,touch:false,dbg:{}};
 const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t, rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)], sgn=v=>v<0?-1:1;
 // ---------- save ----------
 const SAVE_KEY='fatalfront-save-v1';
-const DEF={music:0.8,sfx:0.85,voice:0.9,blood:true,crt:1,easy:false,easySpecials:'touch',shake:true,best:0,wins:{},furthest:{},stageUnlocked:1,runs:0,clears:0};
+const DEF={music:0.8,sfx:0.85,voice:0.9,blood:true,crt:1,easy:false,easySpecials:'touch',shake:true,v2:0,best:0,wins:{},furthest:{},stageUnlocked:1,runs:0,clears:0};
 let SV=Object.assign({},DEF);try{Object.assign(SV,JSON.parse(localStorage.getItem(SAVE_KEY)||'{}'))}catch(e){}
+// v2: CRT/scanlines default off on touch devices (one-time migration)
+if(!SV.v2){SV.v2=1;if(matchMedia('(pointer:coarse)').matches)SV.crt=0}
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SV))}catch(e){}}
 // ---------- screen ----------
-const scr=document.createElement('canvas');scr.width=VW;scr.height=VH;const G=scr.getContext('2d');G.imageSmoothingEnabled=false;
+const scr=document.createElement('canvas');scr.width=VW*RS;scr.height=VH*RS;const G=scr.getContext('2d');G.setTransform(RS,0,0,RS,0,0);G.imageSmoothingEnabled=false;
 let view,vg,crtLayer=null,K=1;
 function makeCRT(w,h,k,mode){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');if(!mode)return null;
- for(let y=0;y<h;y++){const ph=(y%k)/k;const a=ph>0.6?(mode==2?0.42:0.26):ph<0.12?(mode==2?0.15:0.08):0;if(a){g.fillStyle=`rgba(0,0,0,${a})`;g.fillRect(0,y,w,1)}}
+ k=Math.max(2,k);for(let y=0;y<h;y++){const ph=(y%k)/k;const a=ph>0.6?(mode==2?0.42:0.26):ph<0.12?(mode==2?0.15:0.08):0;if(a){g.fillStyle=`rgba(0,0,0,${a})`;g.fillRect(0,y,w,1)}}
  if(mode==2&&k>=3){for(let x=0;x<w;x++){const m=x%3;g.fillStyle=m==0?'rgba(255,0,0,0.06)':m==1?'rgba(0,255,0,0.05)':'rgba(0,0,255,0.07)';g.fillRect(x,0,1,h)}}
  const R=g.createRadialGradient(w/2,h/2,Math.min(w,h)*0.35,w/2,h/2,Math.hypot(w,h)*0.56);R.addColorStop(0,'rgba(0,0,0,0)');R.addColorStop(1,`rgba(0,0,0,${mode==2?0.55:0.3})`);g.fillStyle=R;g.fillRect(0,0,w,h);return c}
-function layout(){const wrap=document.getElementById('wrap'),tc=document.getElementById('touch');const W=innerWidth,H=innerHeight,dpr=devicePixelRatio||1;
+function safeInsets(){const p=document.getElementById('safe');if(!p)return{t:0,r:0,b:0,l:0};const c=getComputedStyle(p);return{t:parseFloat(c.paddingTop)||0,r:parseFloat(c.paddingRight)||0,b:parseFloat(c.paddingBottom)||0,l:parseFloat(c.paddingLeft)||0}}
+// foldable hinge (Viewport Segments API) -> {x,w} vertical fold or {y,h} horizontal fold
+function hingeRect(){try{const sg=(window.viewport&&window.viewport.segments)||(window.visualViewport&&visualViewport.segments);if(sg&&sg.length==2){const a=sg[0],b=sg[1];if(Math.abs(a.top-b.top)<2&&b.left>=a.right-1)return{x:a.right,w:Math.max(0,b.left-a.right)};return{y:a.bottom,h:Math.max(0,b.top-a.bottom)}}}catch(e){}return null}
+function layout(){const W=innerWidth,H=innerHeight,dpr=devicePixelRatio||1;
  E.touch=E.touch||matchMedia('(pointer:coarse)').matches;const portrait=H>W*1.05;document.body.classList.toggle('portrait',portrait);document.body.classList.toggle('landscape',!portrait);document.body.classList.toggle('hastouch',E.touch);
- let aw=W,ah=H;if(E.touch&&portrait){ah=H-Math.min(H*0.42,Math.max(230,H-W*0.75-10))}
- if(E.touch&&!portrait){aw=W-2*Math.min(W*0.2,190)}
- let k=Math.floor(Math.min(aw*dpr/VW,ah*dpr/VH));let cssW,cssH;if(k>=1){cssW=VW*k/dpr;cssH=VH*k/dpr}else{k=1;const f=Math.min(aw/VW,ah/VH);cssW=VW*f;cssH=VH*f}
- if(k<2&&Math.min(aw/VW,ah/VH)>1.6){const f=Math.min(aw/VW,ah/VH);cssW=VW*f;cssH=VH*f}
- K=k;view.width=VW*k;view.height=VH*k;view.style.width=cssW+'px';view.style.height=cssH+'px';vg=view.getContext('2d');vg.imageSmoothingEnabled=false;
- const top=E.touch&&portrait?Math.max(4,(ah-cssH)/2):(H-cssH)/2;view.style.left=((W-cssW)/2)+'px';view.style.top=top+'px';
- if(tc){tc.style.top=portrait?(top+cssH)+'px':'0px';tc.style.height=portrait?(H-top-cssH)+'px':H+'px'}
- crtLayer=makeCRT(view.width,view.height,k,SV.crt);E.layout={W,H,k,cssW,cssH,portrait,top}}
+ const si=safeInsets(),hg=hingeRect();const AW=W-si.l-si.r,AH=H-si.t-si.b;const fit=(w,h)=>{const f=Math.max(0.1,Math.min(w/VW,h/VH));return[VW*f,VH*f]};
+ let mode='full',gw,gh;
+ if(E.touch){// bottom control band or side bands, whichever leaves the bigger picture
+  const band=clamp(AH-AW*0.75,230,AH*0.46),B=fit(AW,AH-band);const side=clamp(AW*0.19,168,250),S=fit(AW-2*side,AH);
+  if(B[0]>=S[0]){mode='bottom';[gw,gh]=B}else{mode='sides';[gw,gh]=S}}
+ else [gw,gh]=fit(AW,AH);
+ // snap to an exact integer pixel multiple when it costs little, for perfectly even pixels
+ const dev=gw*dpr/VW,ki=Math.floor(dev);if(ki>=2&&ki/dev>0.86){gw=VW*ki/dpr;gh=VH*ki/dpr}
+ const gx=si.l+(AW-gw)/2,gy=mode=='bottom'?si.t+Math.max(4,Math.min(24,(AH-gh-230)/2)):si.t+(AH-gh)/2;
+ const vw=Math.round(gw*dpr),vh=Math.round(gh*dpr);if(view.width!==vw||view.height!==vh){view.width=vw;view.height=vh}view.style.width=gw+'px';view.style.height=gh+'px';view.style.left=gx+'px';view.style.top=gy+'px';
+ vg=view.getContext('2d');vg.imageSmoothingEnabled=false;K=vh/VH;
+ crtLayer=makeCRT(view.width,view.height,K,SV.crt);E.layout={W,H,dpr,portrait,mode,si,hg,gx,gy,gw,gh,k:K,cssW:gw,cssH:gh,top:gy};if(typeof TC!='undefined')TC.place()}
 function present(){vg.drawImage(scr,0,0,view.width,view.height);if(crtLayer){if(SV.crt==2){vg.globalCompositeOperation='lighter';vg.globalAlpha=0.12;vg.filter='blur('+Math.max(1,K)+'px)';vg.drawImage(scr,0,0,view.width,view.height);vg.filter='none';vg.globalAlpha=1;vg.globalCompositeOperation='source-over'}vg.drawImage(crtLayer,0,0)}}
 // ---------- input ----------
 const BTN=['l','r','u','d','a','x','b','y','rb','start','back'];
@@ -33,7 +44,7 @@ const IN=[mkPad(),mkPad()];IN.src=['kb','none'];
 const kbState={};const KB1={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d',KeyZ:'a',Space:'a',KeyX:'x',KeyJ:'x',KeyC:'b',KeyK:'b',KeyV:'y',KeyL:'y',ShiftLeft:'rb',ShiftRight:'rb',Enter:'start',Escape:'start',Backspace:'back'};
 addEventListener('keydown',e=>{if(KB1[e.code]){kbState[KB1[e.code]]=1;e.preventDefault();E.lastInput='kb';AU.unlock()}});
 addEventListener('keyup',e=>{if(KB1[e.code]){kbState[KB1[e.code]]=0}});
-const touchState={};let stick={id:null,x:0,y:0,ox:0,oy:0};
+const touchState={};let stick={id:null,x:0,y:0};// driven by touch.js (TC)
 let padPrev=[[],[]];E.pads=0;E.fakePads=null;
 function readPads(){const ps=(E.fakePads||(navigator.getGamepads?navigator.getGamepads():[])||[]);const out=[];for(const p of ps)if(p&&p.connected!==false)out.push(p);E.pads=out.length;return out}
 function pollInput(){const pads=readPads();
@@ -45,20 +56,12 @@ function pollInput(){const pads=readPads();
   const x=p.axes[0]||0,y=p.axes[1]||0;if(Math.hypot(x,y)>0.3){ax[pl]=x;ay[pl]=y}
   t.a|=b(0);t.b|=b(1);t.x|=b(2);t.y|=b(3);t.rb|=b(5)|b(4)|b(7);t.start|=b(9);t.back|=b(8);t.u|=b(12);t.d|=b(13);t.l|=b(14);t.r|=b(15);
   if(BTN.some(k=>t[k])||Math.hypot(x,y)>0.3){E.lastInput='pad';AU.unlock()}});
- for(let pl=0;pl<2;pl++){const t=s[pl];if(Math.hypot(ax[pl],ay[pl])>0.35){const a=Math.atan2(ay[pl],ax[pl]),oct=Math.round(a/(Math.PI/4));const dx=Math.round(Math.cos(oct*Math.PI/4)),dy=Math.round(Math.sin(oct*Math.PI/4));if(dx<0)t.l=1;if(dx>0)t.r=1;if(dy<0)t.u=1;if(dy>0)t.d=1}
+ for(let pl=0;pl<2;pl++){const t=s[pl];if(Math.hypot(ax[pl],ay[pl])>(pl==0&&stick.id!==null?0.05:0.35)){const a=Math.atan2(ay[pl],ax[pl]),oct=Math.round(a/(Math.PI/4));const dx=Math.round(Math.cos(oct*Math.PI/4)),dy=Math.round(Math.sin(oct*Math.PI/4));if(dx<0)t.l=1;if(dx>0)t.r=1;if(dy<0)t.u=1;if(dy>0)t.d=1}
   const I=IN[pl];BTN.forEach(k=>{const v=t[k]?1:0;I['_'+k]=v&&!I[k]?1:0;I['r_'+k]=!v&&I[k]?1:0;I[k]=v});I.ax=ax[pl];I.ay=ay[pl]}}
 const pressed=(k,pl)=>pl===undefined?(IN[0]['_'+k]||IN[1]['_'+k]):IN[pl]['_'+k];
 const held=(k,pl)=>pl===undefined?(IN[0][k]||IN[1][k]):IN[pl][k];
 // menu auto-repeat for directions
 const rep={};function menuDir(k,pl){const id=k+(pl||0);const h=pl===undefined?held(k):held(k,pl);if(!h){rep[id]=0;return 0}rep[id]=(rep[id]||0)+1;return rep[id]==1||(rep[id]>18&&rep[id]%5==0)}
-function setupTouch(){const tc=document.getElementById('touch');if(!tc)return;const zone=document.getElementById('stickzone'),knob=document.getElementById('knob'),base=document.getElementById('stickbase');
- const R=()=>Math.max(40,Math.min(70,zone.clientWidth*0.28));
- zone.addEventListener('pointerdown',e=>{E.touch=true;E.lastInput='touch';AU.unlock();stick.id=e.pointerId;zone.setPointerCapture(e.pointerId);const r=zone.getBoundingClientRect();stick.ox=e.clientX-r.left;stick.oy=e.clientY-r.top;base.style.left=stick.ox+'px';base.style.top=stick.oy+'px';base.style.width=base.style.height=R()*2+'px';knob.style.left=stick.ox+'px';knob.style.top=stick.oy+'px';base.classList.add('on');knob.classList.add('on');e.preventDefault()});
- zone.addEventListener('pointermove',e=>{if(e.pointerId!==stick.id)return;const r=zone.getBoundingClientRect();let dx=e.clientX-r.left-stick.ox,dy=e.clientY-r.top-stick.oy;const m=Math.hypot(dx,dy),rr=R();if(m>rr){dx*=rr/m;dy*=rr/m}stick.x=dx/rr;stick.y=dy/rr;knob.style.left=(stick.ox+dx)+'px';knob.style.top=(stick.oy+dy)+'px'});
- const end=e=>{if(e.pointerId!==stick.id)return;stick.id=null;stick.x=stick.y=0;base.classList.remove('on');knob.classList.remove('on')};zone.addEventListener('pointerup',end);zone.addEventListener('pointercancel',end);
- tc.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;const dn=e=>{E.touch=true;E.lastInput='touch';AU.unlock();touchState[k]=1;b.classList.add('on');e.preventDefault();try{b.setPointerCapture(e.pointerId)}catch(_){}};const up=e=>{touchState[k]=0;b.classList.remove('on')};
-  b.addEventListener('pointerdown',dn);b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up);b.addEventListener('lostpointercapture',up)});
- view.addEventListener('pointerdown',e=>{AU.unlock();if(E.onTap)E.onTap(e)})}
 // ---------- audio ----------
 const AU={ctx:null,buf:{},bus:{},last:{},music:null,musicName:null,ok:false,
  init(){if(this.ctx)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=this.ctx=new C({latencyHint:'interactive'});
@@ -95,7 +98,7 @@ const glyphCache=new Map();
 function glyph(ch,col){const key=ch+col;let c=glyphCache.get(key);if(c)return c;const rows=FONT[ch];c=document.createElement('canvas');c.width=5;c.height=7;const g=c.getContext('2d');g.fillStyle=col;if(rows)rows.forEach((r,y)=>{for(let x=0;x<5;x++)if(r&(16>>x))g.fillRect(x,y,1,1)});glyphCache.set(key,c);return c}
 function textW(s,sc=1){return s.length*6*sc-sc}
 function txt(g,s,x,y,col='#fff',o={}){s=String(s).toUpperCase();const sc=o.s||1;let w=textW(s,sc);if(o.a=='c')x-=w/2;else if(o.a=='r')x-=w;x=Math.round(x);y=Math.round(y);
- if(o.sh!==false){const sh=o.shc||'#000';for(let i=0;i<s.length;i++){if(s[i]!==' ')g.drawImage(glyph(s[i],sh),x+i*6*sc+sc,y+sc,5*sc,7*sc)}}
+ if(o.sh!==false){const sh=o.shc||'#000';const off=[[sc,sc],[-0.5,0],[0.5,0],[0,-0.5],[0,0.5]];for(const[ox,oy]of off)for(let i=0;i<s.length;i++){if(s[i]!==' ')g.drawImage(glyph(s[i],sh),x+i*6*sc+ox,y+oy,5*sc,7*sc)}}
  for(let i=0;i<s.length;i++)if(s[i]!==' ')g.drawImage(glyph(s[i],col),x+i*6*sc,y,5*sc,7*sc);return w}
 // big gradient arcade lettering with chunky outline
 const bigCache=new Map();
@@ -109,6 +112,13 @@ function bigText(s,sc,c1='#fff6a0',c2='#e01810',ol='#200000'){const key=s+sc+c1+
 function big(g,s,x,y,sc,o={}){const c=bigText(s,sc,o.c1,o.c2,o.ol);const X=o.a=='l'?x:o.a=='r'?x-c.width:x-c.width/2;if(o.sx){g.drawImage(c,Math.round(X+c.width*(1-o.sx)/2),Math.round(y),Math.round(c.width*o.sx),c.height)}else g.drawImage(c,Math.round(X),Math.round(y));return c}
 // ---------- images ----------
 const IMG={};function loadImg(n,u){return new Promise(r=>{const i=new Image();i.onload=()=>{IMG[n]=i;r()};i.onerror=()=>{console.warn('img',u);r()};i.src=u})}
+// soft additive glow used by bullets / pickups (radial sprite cached per colour)
+const glowCache=new Map();function glow(g,x,y,r,col,a=0.5){let c=glowCache.get(col);if(!c){c=document.createElement('canvas');c.width=c.height=64;const q=c.getContext('2d');const R=q.createRadialGradient(32,32,0,32,32,32);R.addColorStop(0,col);R.addColorStop(0.35,col);R.addColorStop(1,'rgba(0,0,0,0)');q.fillStyle=R;q.fillRect(0,0,64,64);glowCache.set(col,c)}
+ const o=g.globalCompositeOperation,ga=g.globalAlpha;g.globalCompositeOperation='lighter';g.globalAlpha=a;g.imageSmoothingEnabled=true;g.drawImage(c,x-r,y-r,r*2,r*2);g.imageSmoothingEnabled=false;g.globalAlpha=ga;g.globalCompositeOperation=o}
+// background depth: desaturate, flatten contrast, darken and add cool atmospheric haze so the action reads on top
+function haze(img,sat,con,dark,ha){const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);const im=g.getImageData(0,0,c.width,c.height),d=im.data;const hz=[96,110,140];
+ for(let i=0;i<d.length;i+=4){const r=d[i],gg=d[i+1],b=d[i+2],l=0.3*r+0.59*gg+0.11*b;const yf=1-Math.floor(i/4/c.width)/c.height;const h=ha*(0.6+0.8*yf);
+  for(let k=0;k<3;k++){let v=l+((k==0?r:k==1?gg:b)-l)*sat;v=128+(v-128)*con;v*=dark;d[i+k]=v+(hz[k]-v)*h}}g.putImageData(im,0,0);return c}
 // ---------- particles / fx shared ----------
 const FX={list:[],shake:0,flash:0,flashC:'#fff',hitstop:0,
  add(p){if(this.list.length<700)this.list.push(p);return p},

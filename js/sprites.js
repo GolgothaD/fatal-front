@@ -146,16 +146,23 @@ function draw(g,cs,P){const K=solve(P,cs);
  return K}
 // ---------- post: threshold + posterize + outline ----------
 const BY=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
-function post(cv,levels=7,outline='#0c0806'){const g=cv.getContext('2d');const W=cv.width,H=cv.height;const im=g.getImageData(0,0,W,H),d=im.data;
+// hi-res post: posterize+dither, 2px dark outline (1 logical px) and a rim light on the lit (upper/back) edge
+function post(cv,levels=7,outline='#0c0806',rim){const g=cv.getContext('2d');const W=cv.width,H=cv.height;const im=g.getImageData(0,0,W,H),d=im.data;
  const st=255/(levels-1);const o=hex(outline);const mask=new Uint8Array(W*H);
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;if(d[i+3]<120){d[i+3]=0;continue}mask[y*W+x]=1;const b=(BY[(y&3)*4+(x&3)]/16-0.5)*st*0.55;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;if(d[i+3]<120){d[i+3]=0;continue}mask[y*W+x]=1;const b=(BY[(y&3)*4+(x&3)]/16-0.5)*st*0.5;
   for(let c=0;c<3;c++){const v=Math.round((d[i+c]+b)/st)*st;d[i+c]=Math.max(0,Math.min(255,v))}d[i+3]=255}
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(mask[y*W+x])continue;if((x>0&&mask[y*W+x-1])||(x<W-1&&mask[y*W+x+1])||(y>0&&mask[(y-1)*W+x])||(y<H-1&&mask[(y+1)*W+x])){const i=(y*W+x)*4;d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2];d[i+3]=255}}
+ if(rim){const rc=hex(rim);for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!mask[y*W+x])continue;const up=y<3||!mask[(y-3)*W+x],lf=x<3||!mask[y*W+x-3];if(up||lf){const i=(y*W+x)*4,k=up&&lf?0.62:0.42;for(let c=0;c<3;c++)d[i+c]=Math.round(d[i+c]+(rc[c]-d[i+c])*k)}}}
+ const m2=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++){const j=y*W+x;if(mask[j])continue;let n=0;for(let dy=-2;dy<=2&&!n;dy++)for(let dx=-2;dx<=2;dx++){if(Math.abs(dx)+Math.abs(dy)>3)continue;const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<W&&Y<H&&mask[Y*W+X]){n=1;break}}if(n)m2[j]=1}
+ for(let j=0;j<W*H;j++)if(m2[j]){const i=j*4;d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2];d[i+3]=255}
  g.putImageData(im,0,0);return cv}
-const cache=new Map();
-// render a pose at scale s (pixels per unit). returns {c:canvas, ox, oy} where (ox,oy)=feet origin within canvas
+const cache=new Map();let cachePx=0;const CACHE_MAX=26e6;
+const HEROES={raze:1,brick:1,nova:1,kazan:1};
+// render a pose at scale s (logical pixels per unit), drawn at RS x resolution. returns {c, ox, oy} in logical units
 function render(id,P,s,flip,key){const k=key&&(id+'|'+key+'|'+s+'|'+(flip?1:0));if(k&&cache.has(k))return cache.get(k);
- const cs=C[id];const S=(cs.hScale||1);const W=Math.ceil(150*s*S),H=Math.ceil(150*s*S);const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
- const ox=Math.round(W/2),oy=Math.round(H*0.82);g.translate(ox,oy);if(flip)g.scale(-1,1);g.scale(s,s);if(P.rot){g.translate(0,-48);g.rotate(rad(P.rot));g.translate(0,48)}
- draw(g,cs,P);post(cv,s>0.7?11:8);let oyy=oy;if(P.ground){const d=g.getImageData(0,0,W,H).data;let lb=0;for(let y=H-1;y>=0&&!lb;y--)for(let x=0;x<W;x++)if(d[(y*W+x)*4+3]){lb=y+1;break}oyy=lb||oy}const r={c:cv,ox,oy:oyy};if(k)cache.set(k,r);return r}
-return{C,render,cache,hex,sh,rot}})();
+ const cs=C[id];const S=(cs.hScale||1);const W=Math.ceil(150*s*S*RS),H=W;const cv=document.createElement('canvas');cv.width=W;cv.height=H;cv._rs=RS;const g=cv.getContext('2d');
+ const ox=Math.round(W/2/RS)*RS,oy=Math.round(H*0.82/RS)*RS;g.translate(ox,oy);if(flip)g.scale(-1,1);g.scale(s*RS,s*RS);if(P.rot){g.translate(0,-48);g.rotate(rad(P.rot));g.translate(0,48)}
+ draw(g,cs,P);post(cv,s>0.7?13:10,'#0a0608',HEROES[id]?'#d8f0ff':'#ffd0a0');let oyy=oy;if(P.ground){const d=g.getImageData(0,0,W,H).data;let lb=0;for(let y=H-1;y>=0&&!lb;y--)for(let x=0;x<W;x++)if(d[(y*W+x)*4+3]){lb=y+1;break}oyy=lb||oy}
+ const r={c:cv,ox:ox/RS,oy:Math.round(oyy/RS)};if(k){cache.set(k,r);cachePx+=W*H;while(cachePx>CACHE_MAX&&cache.size>50){const [kk,v]=cache.entries().next().value;cache.delete(kk);cachePx-=v.c.width*v.c.height}}return r}
+// white silhouette of a rendered sprite, for hit flashes
+function flash(r){if(r.w)return r.w;const c=document.createElement('canvas');c.width=r.c.width;c.height=r.c.height;c._rs=r.c._rs;const g=c.getContext('2d');g.drawImage(r.c,0,0,c.width,c.height);g.globalCompositeOperation='source-in';g.fillStyle='#ffffff';g.fillRect(0,0,c.width,c.height);r.w=c;return c}
+return{C,render,flash,cache,hex,sh,rot}})();

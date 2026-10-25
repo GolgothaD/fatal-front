@@ -44,7 +44,7 @@ class Fighter{
 }
 const Duel={
  start(cfg){// cfg:{stage, boss, players:[{pl,id}], onEnd}
-  const D=this;D.cfg=cfg;D.stage=cfg.stage;D.bg=IMG['bg'+cfg.stage];D.W=Math.max(400,D.bg?D.bg.width:427);D.round=0;D.wins=[0,0];D.proj=[];D.fxText=[];D.splats=[];
+  const D=this;D.cfg=cfg;D.stage=cfg.stage;D.bg=IMG['bgd'+cfg.stage]||IMG['bg'+cfg.stage];D.W=Math.max(400,D.bg?D.bg.width:427);D.round=0;D.wins=[0,0];D.proj=[];D.fxText=[];D.splats=[];
   D.boss=new Fighter(cfg.boss,D.W/2+60,-1,'ai');D.bdef=BOSS[cfg.boss]||{sp:(PLAYER_AI[cfg.boss]||{sp:[]}).sp,agg:0.5,blk:0.4,spc:0.2,aa:0.4,spd:1};
   D.diff=clamp(0.35+cfg.stage*0.09+(cfg.loop||0)*0.15,0,1.1);if(SV.easy)D.diff*=0.75;
   D.newRound();AU.playMusic(cfg.stage==7?'final':'fight');D.warm=[];[cfg.boss,...cfg.players.map(p=>p.id)].forEach(id=>{for(const a in ANIM.A){if(a.startsWith('aim_')||a.startsWith('run_')||a=='prone'||a=='die')continue;ANIM.A[a].f.forEach((P,i)=>{D.warm.push([id,P,a+i,false],[id,P,a+i,true])})}})},
@@ -175,7 +175,7 @@ const Duel={
  applyHit(f,o,m,blocked,px,py){const D=this;const isSp=!MOVES[m.name]&&!m.throw;let dmg=m.dmg;if(o.ctl!=='ai'&&SV.easy)dmg*=0.7;if(o.ctl==='ai')dmg*=1;if(f.ctl==='ai')dmg*=0.75+D.diff*0.35;
   const hx=px??(o.x-f.face*6),hy=py??(FLOOR+o.y+((m.box?m.box[2]+m.box[3]:-120)/2)*o.S);
   if(blocked){const chip=isSp?dmg*0.15:0;o.hp=Math.max(o.hp>1?1:0,o.hp-chip);o.blockstun=10;o.vx=f.face*1.6;AU.sfx('block',{vol:0.7});FX.burst(hx,hy,6,{c:['#fff','#a0c0ff'],v0:1,v1:2.5,g:0,l0:6,l1:12});FX.hitstop=3;return}
-  o.hp=Math.max(0,o.hp-dmg);o.move=null;o.special=null;o.glowP=0;o.blocking=false;o.dizzy=0;
+  o.hp=Math.max(0,o.hp-dmg);o.hitF=7;o.move=null;o.special=null;o.glowP=0;o.blocking=false;o.dizzy=0;
   f.combo=(o.hitstun>0||o.state=='knock')?f.combo+1:1;if(f.combo>=3)D.say(f.combo+' HIT COMBO',D.st,{sc:1,life:50,y:46,x:f===D.p?56:264,small:1});
   const knock=m.knock||o.hp<=0||o.air;
   if(m.freeze&&o.hp>0){o.freeze=m.freeze;o.frozenT=m.freeze;AU.sfx('laser',{rate:0.5});}
@@ -255,7 +255,7 @@ const Duel={
   const order=[D.p,D.boss].sort((a,b)=>(a.move||a.special?1:0)-(b.move||b.special?1:0));
   for(const f of order){if(f.gone)continue;const s=f.sprite();const x=Math.round(f.x-cx-s.ox),y=Math.round(FLOOR+f.y+cy-s.oy);
    if(f.inv>0&&f.state!='getup'&&D.st%4<2&&f.special&&f.special.fn=='ghost'){g.globalAlpha=0.4}
-   g.drawImage(s.c,x,y);g.globalAlpha=1;
+   g.drawImage(s.c,x,y);g.globalAlpha=1;if(f.hitF>0){f.hitF--;g.globalAlpha=Math.min(1,f.hitF/5);g.drawImage(SPR.flash(s),x,y);g.globalAlpha=1}
    if(f.freeze>0){g.globalAlpha=0.45;g.fillStyle='#a0e8ff';g.globalCompositeOperation='source-atop';g.globalCompositeOperation='source-over';g.fillRect(x+s.ox-14,y+s.oy-92*f.S,28,92*f.S);g.globalAlpha=1}
    if(f.phase==2&&D.st%6<3){g.globalAlpha=0.25;g.globalCompositeOperation='lighter';g.drawImage(s.c,x,y);g.globalCompositeOperation='source-over';g.globalAlpha=1}
    if(f.dizzy&&D.state=='endit'){for(let i=0;i<3;i++){const a=D.st*0.1+i*2.1;txt(g,'*',f.x-cx+Math.cos(a)*10-2,FLOOR+f.y-100*f.S+Math.sin(a)*3,'#ffe040',{sh:false})}}}
@@ -288,14 +288,14 @@ const Duel={
    case'meteor':g.fillStyle='#401008';g.beginPath();g.arc(x,y,7,0,7);g.fill();g.fillStyle='#ff6020';g.beginPath();g.arc(x,y,5,0,7);g.fill();g.fillStyle='#ffe0a0';g.fillRect(x-1,y-2,3,3);break;
   }},
  hud(g){const D=this,P=D.p,B=D.boss;
-  const bar=(x,f,right)=>{const w=128;g.fillStyle='#000';g.fillRect(x-1,7,w+2,11);g.fillStyle='#600';g.fillRect(x,8,w,9);
-   const tw=Math.round(w*f.trail/f.maxhp),hw=Math.round(w*f.hp/f.maxhp);g.fillStyle='#e02010';right?g.fillRect(x+w-tw,8,tw,9):g.fillRect(x,8,tw,9);
-   const L=g.createLinearGradient(0,8,0,17);L.addColorStop(0,'#fff8a0');L.addColorStop(0.4,'#f0d020');L.addColorStop(1,'#a07000');g.fillStyle=L;right?g.fillRect(x+w-hw,8,hw,9):g.fillRect(x,8,hw,9);
-   g.fillStyle='rgba(255,255,255,0.35)';g.fillRect(x,8,w,1);txt(g,f.name,right?x+w:x,20,'#fff',{a:right?'r':'l'})};
+  const bar=(x,f,right)=>{const w=128;g.fillStyle='#fff';g.fillRect(x-1.5,5.5,w+3,15);g.fillStyle='#000';g.fillRect(x-1,6,w+2,14);g.fillStyle='#500';g.fillRect(x,7,w,12);
+   const tw=Math.round(w*f.trail/f.maxhp),hw=Math.round(w*f.hp/f.maxhp);g.fillStyle='#e02010';right?g.fillRect(x+w-tw,7,tw,12):g.fillRect(x,7,tw,12);
+   const L=g.createLinearGradient(0,7,0,19);L.addColorStop(0,'#fff8a0');L.addColorStop(0.4,'#f0d020');L.addColorStop(1,'#a07000');g.fillStyle=L;right?g.fillRect(x+w-hw,7,hw,12):g.fillRect(x,7,hw,12);
+   g.fillStyle='rgba(255,255,255,0.4)';g.fillRect(x,7,w,1.5);txt(g,f.name,right?x+w:x,23,'#fff',{a:right?'r':'l',s:f.name.length>10?1:2})};
   bar(8,P,false);bar(184,B,true);
   const tt=String(D.timer).padStart(2,'0');big(g,tt,160,4,2,{c1:'#ffffff',c2:'#a0a0c0',ol:'#000'});
-  for(let i=0;i<D.wins[0];i++)D.medal(g,10+i*12,30);for(let i=0;i<D.wins[1];i++)D.medal(g,302-i*12,30);
-  if(D.cfg.players.length>1)txt(g,(D.ap.pl==0?'P1':'P2')+' FIGHTS',8,40,'#a0e0ff',{s:1});
+  for(let i=0;i<D.wins[0];i++)D.medal(g,10+i*12,40);for(let i=0;i<D.wins[1];i++)D.medal(g,302-i*12,40);
+  if(D.cfg.players.length>1)txt(g,(D.ap.pl==0?'P1':'P2')+' FIGHTS',8,52,'#a0e0ff',{s:1});
   if(Game.hudExtra)Game.hudExtra(g)},
  medal(g,x,y){g.fillStyle='#000';g.fillRect(x-1,y-1,10,10);g.fillStyle='#e8e0c8';g.fillRect(x,y,8,6);g.fillRect(x+1,y+6,6,2);g.fillStyle='#000';g.fillRect(x+1,y+2,2,2);g.fillRect(x+5,y+2,2,2);g.fillRect(x+3,y+5,2,1)},
 };

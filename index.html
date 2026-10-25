@@ -7,32 +7,30 @@
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 #view{position:absolute;image-rendering:pixelated;image-rendering:crisp-edges;background:#000}
-#touch{display:none;position:absolute;left:0;right:0;top:0;pointer-events:none}
+#touch{display:none;position:fixed;inset:0;pointer-events:none;z-index:2}
 body.hastouch #touch{display:block}
-#stickzone{position:absolute;pointer-events:auto;touch-action:none}
-#stickbase,#knob{position:absolute;border-radius:50%;transform:translate(-50%,-50%);opacity:0;pointer-events:none}
-#stickbase{border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06)}#knob{width:54px;height:54px;background:rgba(255,80,40,.55);border:2px solid rgba(255,220,180,.7)}
-#stickbase.on,#knob.on{opacity:1}#stickzone::after{content:'\2725  MOVE';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,.22);font:700 13px system-ui,sans-serif;letter-spacing:3px;white-space:nowrap;pointer-events:none}
-.btn{position:absolute;pointer-events:auto;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;font:bold 20px/1 system-ui,sans-serif;color:#fff;border:2px solid rgba(255,255,255,.5);touch-action:none;text-shadow:0 1px 2px #000}
-.btn.on{filter:brightness(1.6);transform:scale(.94)}
-.btn[data-k=a]{background:rgba(40,170,60,.55)}.btn[data-k=x]{background:rgba(40,100,220,.55)}.btn[data-k=b]{background:rgba(220,50,40,.55)}.btn[data-k=y]{background:rgba(230,180,20,.55)}
-.sm{width:62px;height:30px;border-radius:15px;font-size:12px;background:rgba(80,80,80,.6)}
-/* portrait: controls below game */
-body.portrait #stickzone{left:0;top:0;width:52%;height:100%}
-body.portrait .btn[data-k=y]{right:calc(4% + 74px);top:8%}body.portrait .btn[data-k=b]{right:4%;top:calc(8% + 40px)}
-body.portrait .btn[data-k=x]{right:calc(4% + 148px);top:calc(8% + 40px)}body.portrait .btn[data-k=a]{right:calc(4% + 74px);top:calc(8% + 80px)}
-body.portrait .sm[data-k=rb]{right:4%;bottom:8%}body.portrait .sm[data-k=start]{right:calc(4% + 76px);bottom:8%}body.portrait .sm[data-k=back]{left:4%;bottom:8%}
-/* landscape: controls at the sides */
-body.landscape #stickzone{left:0;top:20%;width:20%;height:80%}
-body.landscape .btn[data-k=y]{right:76px;top:30%}body.landscape .btn[data-k=b]{right:8px;top:calc(30% + 38px)}
-body.landscape .btn[data-k=x]{right:144px;top:calc(30% + 38px)}body.landscape .btn[data-k=a]{right:76px;top:calc(30% + 76px)}
-body.landscape .sm[data-k=rb]{right:8px;top:8px}body.landscape .sm[data-k=start]{right:80px;top:8px}body.landscape .sm[data-k=back]{left:8px;top:8px}
-body.landscape #touch .btn{transform-origin:center}
-@media (max-height:420px){.btn{width:54px;height:54px}}
+#safe{position:fixed;inset:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+html,body{overscroll-behavior:none;-webkit-touch-callout:none}
+.tc{position:absolute;transform:translate(-50%,-50%);box-sizing:border-box;pointer-events:none}
+.tc-stick .ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.75);background:radial-gradient(circle,rgba(255,255,255,.05) 0 40%,rgba(255,255,255,.16) 41% 100%);box-shadow:0 0 0 2px rgba(0,0,0,.6),inset 0 0 0 2px rgba(0,0,0,.4)}
+.tc-stick .knob{position:absolute;left:50%;top:50%;width:44%;height:44%;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(circle at 35% 30%,#ffb090,#d04020 60%,#701808);border:3px solid #fff;box-shadow:0 2px 0 rgba(0,0,0,.6)}
+.tc-stick span{position:absolute;left:50%;bottom:-2px;transform:translate(-50%,100%);font:800 11px system-ui,sans-serif;letter-spacing:2px;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap}
+.tc-btn{border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:system-ui,sans-serif;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.45),rgba(var(--c),1) 45%,rgba(0,0,0,.55) 120%);border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.7),0 3px 0 rgba(0,0,0,.5);text-shadow:0 1px 2px #000,0 0 2px #000;line-height:1}
+.tc-btn b{font-size:1.9em;font-weight:900}.tc-btn i{font-style:normal;font-weight:800;font-size:.78em;letter-spacing:.5px;margin-top:2px}
+.tc-sm{border-radius:30%}.tc-sm b{font-size:1.3em}.tc-sm i{font-size:1em}
+.tc-btn.on{filter:brightness(1.7);transform:translate(-50%,-50%) scale(.92)}
+body.tcedit .tc{outline:2px dashed rgba(255,255,255,.7);outline-offset:4px}body.tcedit .tc.sel{outline:3px solid #ffd040}
+#tcpanel{display:none;position:fixed;z-index:5;left:50%;top:calc(env(safe-area-inset-top) + 8px);transform:translateX(-50%);width:min(92vw,380px);max-height:calc(100% - 16px);overflow:auto;background:rgba(14,8,10,.94);border:2px solid #e0a040;border-radius:10px;color:#fff;font:14px system-ui,sans-serif;box-shadow:0 6px 30px #000;touch-action:pan-y}
+#tcpanel.show{display:block}#tcpanel .hd{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#3a0c08;border-radius:8px 8px 0 0}#tcpanel .hd span{font-weight:900;letter-spacing:1px}#tcpanel .hd small{flex:1;opacity:.8}
+#tcpanel.min .bd{display:none}#tcpanel .bd{padding:6px 12px 12px}#tcpanel .hint{margin:4px 0 8px;opacity:.8;font-size:12.5px}
+#tcpanel .row{display:flex;align-items:center;gap:10px;margin:7px 0}#tcpanel label{width:118px}#tcpanel input[type=range]{flex:1;height:28px}#tcpanel output{width:48px;text-align:right}
+#tcpanel input[type=checkbox]{width:22px;height:22px}
+#tcpanel .sel{border-top:1px solid #553;margin-top:8px;padding-top:6px}#tcpanel .sel b{color:#ffd040}
+#tcpanel button{font:700 14px system-ui,sans-serif;color:#fff;background:#333;border:1px solid #777;border-radius:6px;padding:9px 12px;min-height:40px}
+#tcpanel .seg button.act{background:#c04020;border-color:#ffb080}#tcpanel .btns{justify-content:space-between}#tcpanel .pri{background:#2a8a3a;border-color:#8f8}
+#tcpanel #tc-min{min-height:32px;padding:4px 10px}
 </style></head><body>
 <canvas id="view" width="320" height="240" aria-label="Fatal Front game screen"></canvas>
-<div id="touch"><div id="stickzone"><div id="stickbase"></div><div id="knob"></div></div>
-<div class="btn" data-k="y">Y</div><div class="btn" data-k="x">X</div><div class="btn" data-k="b">B</div><div class="btn" data-k="a">A</div>
-<div class="btn sm" data-k="rb">RB</div><div class="btn sm" data-k="start">PAUSE</div><div class="btn sm" data-k="back">BACK</div></div>
-<script src="js/engine.js"></script><script src="js/sprites.js"></script><script src="js/anims.js"></script><script src="js/fight.js"></script><script src="js/run.js"></script><script src="js/main.js"></script>
+<div id="safe"></div><div id="touch"></div>
+<script src="js/engine.js"></script><script src="js/sprites.js"></script><script src="js/anims.js"></script><script src="js/fight.js"></script><script src="js/run.js"></script><script src="js/touch.js"></script><script src="js/main.js"></script>
 </body></html>
