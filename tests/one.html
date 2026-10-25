@@ -1,0 +1,5 @@
+<!doctype html><body style="background:#345;margin:0"><canvas id=c width=300 height=170 style="image-rendering:pixelated;width:1200px"></canvas>
+<script src="../js/sprites.js"></script><script src="../js/anims.js"></script><script>
+const g=c.getContext('2d');const q=new URLSearchParams(location.search);const ids=(q.get('ids')||'raze,brick').split(',');const an=(q.get('a')||'idle,punch').split(',');
+let x=0;ids.forEach(id=>an.forEach(a=>{const A=ANIM.A[a];const f=A.f[Math.min(A.f.length-1,A.hit?2:0)];const s=SPR.render(id,f,1,false,id+a);g.drawImage(s.c,x+50-s.ox,150-s.oy);x+=75}));
+</script>

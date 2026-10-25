@@ -1,0 +1,7 @@
+<!doctype html><body style="background:#345;margin:0"><canvas id=c width=1100 height=600 style="image-rendering:pixelated;width:1200px"></canvas>
+<script src="../js/sprites.js"></script><script src="../js/anims.js"></script><script>
+const g=c.getContext('2d');g.imageSmoothingEnabled=false;const ids=['raze','brick','nova','kazan','hask','lockjaw','silk','varga','spec9','dread','khan'];
+const an=['idle','walk','jab','punch','upper','kick','round','sweep','block','hit','knock','win','special','crouch'];
+let y=10;ids.forEach((id,r)=>{an.forEach((a,i)=>{const A=ANIM.A[a];const f=A.f[Math.min(A.f.length-1,a==='walk'?2:(A.hit?2:A.f.length-1))];const s=SPR.render(id,f,0.72,false,id+a);g.drawImage(s.c,10+i*82-s.ox+40,y+80-s.oy+0)});y+=80});
+let x=10;['raze','brick','nova','kazan','grunt','gruntS','gruntL'].forEach((id,j)=>{['aim_f','aim_uf','aim_u','aim_df','run_f','prone','die','flip'].forEach((a,i)=>{const A=ANIM.A[a];const s=SPR.render(id,A.f[a==='flip'?1:A.f.length-1],0.4,false,id+a);g.drawImage(s.c,10+i*40+j*0-s.ox+700+ (j%1),40+j*50-s.oy+40)})});
+</script>

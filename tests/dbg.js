@@ -1,0 +1,3 @@
+const {launch,serve,W8,watch}=require('./lib');(async()=>{const port=serve(),b=await launch(),p=await b.newPage();const e=[];watch(p,e);
+await p.goto(`http://localhost:${port}/tests/one.html?ids=raze,kazan&a=idle,kick`);await W8(500);
+console.log(await p.evaluate(()=>{try{const r=SPR.render('raze',ANIM.A.idle.f[0],1,false);const d=r.c.getContext('2d').getImageData(0,0,r.c.width,r.c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i])n++;return n+' '+r.c.width+' '+document.getElementById('c').getContext('2d').getImageData(0,0,300,170).data.filter((v,i)=>i%4==3&&v).length}catch(x){return x.stack}}));console.log(e);await b.close();process.exit(0)})();
