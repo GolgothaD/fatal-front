@@ -25,6 +25,9 @@ A mid-90s arcade hybrid you can play in the browser. You fight through **run-and
 
 Touch: a stick on the left and labeled buttons on the right, with multi-touch and haptics. To customize them, go to OPTIONS → TOUCH CONTROLS (also in the pause menu). There you can drag or pinch any control, set size and opacity, pick a fixed or floating stick and set the dead zone. Layouts are saved separately for cover vs inner screen and portrait vs landscape, and you can reset to default. On touch, "easy specials" is on by default: hold a direction and tap Y.
 
+## Ground emplacements
+Everything on the ground that shoots can now be destroyed: sandbag bunkers with a gunner (the sandbags chip away), armored gun pods (shoot the red core while they're open; the shell soaks up most damage when closed), and mortar nests (watch for the red target marker). Explosive drums chain-explode and hurt nearby enemies. Supply crates and destroyed emplacements can drop weapons or ARMOR +1 (H).
+
 ## Tests
 Tests use `node tests/boot.js`, `tests/play.js` and `tests/devices.js`, run headless in Chrome through puppeteer-core.
 
