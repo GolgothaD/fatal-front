@@ -38,10 +38,10 @@ function layout(){const W=innerWidth,H=innerHeight,dpr=devicePixelRatio||1;
  crtLayer=makeCRT(view.width,view.height,K,SV.crt);E.layout={W,H,dpr,portrait,mode,si,hg,gx,gy,gw,gh,k:K,cssW:gw,cssH:gh,top:gy};if(typeof TC!='undefined')TC.place()}
 function present(){vg.drawImage(scr,0,0,view.width,view.height);if(crtLayer){if(SV.crt==2){vg.globalCompositeOperation='lighter';vg.globalAlpha=0.12;vg.filter='blur('+Math.max(1,K)+'px)';vg.drawImage(scr,0,0,view.width,view.height);vg.filter='none';vg.globalAlpha=1;vg.globalCompositeOperation='source-over'}vg.drawImage(crtLayer,0,0)}}
 // ---------- input ----------
-const BTN=['l','r','u','d','a','x','b','y','rb','start','back'];
+const BTN=['l','r','u','d','a','x','b','y','rb','start','back','lb'];
 function mkPad(){const o={};BTN.forEach(k=>{o[k]=0;o['_'+k]=0});o.ax=0;o.ay=0;return o}
 const IN=[mkPad(),mkPad()];IN.src=['kb','none'];
-const kbState={};const KB1={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d',KeyZ:'a',Space:'a',KeyX:'x',KeyJ:'x',KeyC:'b',KeyK:'b',KeyV:'y',KeyL:'y',ShiftLeft:'rb',ShiftRight:'rb',Enter:'start',Escape:'start',Backspace:'back'};
+const kbState={};const KB1={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d',KeyZ:'a',Space:'a',KeyX:'x',KeyJ:'x',KeyC:'b',KeyK:'b',KeyV:'y',KeyL:'y',ShiftLeft:'rb',ShiftRight:'rb',KeyQ:'lb',KeyU:'lb',Enter:'start',Escape:'start',Backspace:'back'};
 addEventListener('keydown',e=>{if(KB1[e.code]){kbState[KB1[e.code]]=1;e.preventDefault();E.lastInput='kb';AU.unlock()}});
 addEventListener('keyup',e=>{if(KB1[e.code]){kbState[KB1[e.code]]=0}});
 const touchState={},touchLatch={};let stick={id:null,x:0,y:0};// driven by touch.js (TC)
@@ -54,7 +54,7 @@ function pollInput(){const pads=readPads();
  const map=E.padMap||[0,1];
  pads.forEach((p,i)=>{const pl=map.indexOf(i);if(pl<0)return;const b=j=>p.buttons[j]&&(p.buttons[j].pressed||p.buttons[j].value>0.5)?1:0;const t=s[pl];
   const x=p.axes[0]||0,y=p.axes[1]||0;if(Math.hypot(x,y)>0.3){ax[pl]=x;ay[pl]=y}
-  t.a|=b(0);t.b|=b(1);t.x|=b(2);t.y|=b(3);t.rb|=b(5)|b(4)|b(7);t.start|=b(9);t.back|=b(8);t.u|=b(12);t.d|=b(13);t.l|=b(14);t.r|=b(15);
+  t.a|=b(0);t.b|=b(1);t.x|=b(2);t.y|=b(3);const duel=typeof Game!='undefined'&&Game.scene=='duel';if(duel){t.rb|=b(5)|b(7);t.lb|=b(4)|b(6)}else t.rb|=b(5)|b(4)|b(7);t.start|=b(9);t.back|=b(8);t.u|=b(12);t.d|=b(13);t.l|=b(14);t.r|=b(15);
   if(BTN.some(k=>t[k])||Math.hypot(x,y)>0.3){E.lastInput='pad';AU.unlock()}});
  for(let pl=0;pl<2;pl++){const t=s[pl];const ts=pl==0&&stick.id!==null,mg=Math.hypot(ax[pl],ay[pl]);
   // touch stick: wide horizontal band (±30°) so running never slips into crouch/aim-up; vertical band ±25°

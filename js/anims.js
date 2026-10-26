@@ -40,6 +40,13 @@ A.slam={fps:12,loop:0,f:[P({hip:[0,-50],h1:[-4,-112],h2:[6,-116],lean:-8}),P({hi
 A.dizzy={fps:5,loop:1,f:[P({lean:-12,head:-14,h1:[0,-50],h2:[8,-52],hip:[-2,-46]}),P({lean:8,head:12,h1:[6,-52],h2:[14,-50],hip:[2,-46]})]};
 A.throw={fps:12,loop:0,f:[P({lean:10,h2:[30,-80],h1:[28,-72]}),P({lean:-18,hip:[-4,-47],h2:[-10,-100],h1:[-6,-96],head:-10}),P({lean:-4})]};
 A.thrown={fps:10,loop:0,f:[P({lean:-40,rot:-120,ground:0,h1:[-10,-96],h2:[2,-100]}),lie]};
+// v5: in-between frames so attacks read smoothly (hit frame index scales with them)
+const smooth=(name,n)=>{const a=A[name];if(!a||a.f.length<2)return;const f=a.f,out=[];for(let i=0;i<f.length-1;i++)for(let j=0;j<n;j++)out.push(j?lerpP(f[i],f[i+1],j/n):f[i]);out.push(f[f.length-1]);
+ if(a.hit!==undefined)a.hit*=n;a.f=out;a.fps*=n};
+['jab','punch','lowpunch','upper','kick','round','sweep','throw','special','hit','hitlow','getup','slam'].forEach(k=>smooth(k,2));
+A.jsq={fps:30,loop:0,f:[P({hip:[0,-40],lean:10,f1:[-10,0],f2:[11,0],h1:[10,-63],h2:[16,-68],head:-4})]};
+A.dash={fps:14,loop:0,f:[P({hip:[4,-43],lean:24,f1:[-16,-2],f2:[14,0],h1:[14,-64],h2:[20,-68],hairX:-6}),P({hip:[4,-45],lean:20,f1:[-10,0],f2:[16,-4],h1:[13,-66],h2:[19,-70],hairX:-5}),P({})]};
+A.bdash={fps:12,loop:0,f:[P({hip:[-4,-49],lean:-14,f1:[-16,-6],f2:[6,0],h1:[4,-76],h2:[12,-80],head:-6}),P({hip:[-2,-47],lean:-6,f1:[-12,0],f2:[8,0]}),P({})]};
 // ---------- STAGE (run & gun) ----------
 const SHO=[1,-74];
 function aimP(a,base){const c=Math.cos(a*Math.PI/180),s=Math.sin(a*Math.PI/180);const sh=[SHO[0]+(base.lean||0)*0.4,SHO[1]];

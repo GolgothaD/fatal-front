@@ -1,18 +1,22 @@
 'use strict';
 // ===== Duel (versus-fighter) =====
 const FLOOR=214;
+// Frame data at 60 fps. st=startup, act=active, rec=recovery, stun=hitstun, bs=blockstun, hsF=hitstop frames.
+// ch = moves this one can be cancelled into (on hit or block). Every grounded normal cancels into a special.
 const MOVES={
- jab:{anim:'jab',st:4,act:3,rec:9,dmg:40,box:[10,42,-86,-64],kb:1.6,sfx:'swing',hs:'punch0',stun:14},
- cross:{anim:'punch',st:7,act:3,rec:15,dmg:70,box:[10,46,-88,-64],kb:3,sfx:'swingh',hs:'punch1',stun:18},
- upper:{anim:'upper',st:6,act:5,rec:24,dmg:140,box:[0,30,-128,-40],launch:-6.6,kb:2.2,knock:1,sfx:'swingh',hs:'upper',stun:30,big:1},
- kick:{anim:'kick',st:6,act:4,rec:13,dmg:70,box:[12,52,-66,-40],kb:3,sfx:'swing',hs:'kick0',stun:16},
- round:{anim:'round',st:9,act:4,rec:18,dmg:100,box:[8,48,-96,-66],kb:4,knock:1,launch:-2.5,sfx:'swingh',hs:'kick1',stun:26},
- sweep:{anim:'sweep',st:7,act:4,rec:20,dmg:70,box:[8,52,-14,0],low:1,knock:1,kb:1.5,sfx:'swing',hs:'kick0',stun:26,crouch:1},
- lowpunch:{anim:'lowpunch',st:4,act:3,rec:9,dmg:35,box:[10,40,-62,-44],kb:1.2,sfx:'swing',hs:'punch0',stun:12,crouch:1},
- airkick:{anim:'airkick',st:4,act:30,rec:0,dmg:80,box:[6,42,-50,-16],kb:2.5,air:1,over:1,sfx:'swing',hs:'kick1',stun:20},
- airpunch:{anim:'airpunch',st:4,act:30,rec:0,dmg:60,box:[6,38,-66,-36],kb:2,air:1,over:1,sfx:'swing',hs:'punch1',stun:18},
- throw:{anim:'throw',st:3,act:3,rec:22,dmg:120,box:[4,34,-90,-20],throw:1,knock:1,kb:3.5,launch:-4,sfx:'swingh',hs:'punch2',stun:30},
+ jab:{anim:'jab',st:4,act:2,rec:7,dmg:40,box:[8,44,-88,-62],kb:1.3,sfx:'swing',hs:'punch0',stun:13,bs:6,hsF:6,ch:['jab','cross','kick','lowpunch','upper','sweep']},
+ cross:{anim:'punch',st:6,act:3,rec:12,dmg:70,box:[8,48,-90,-62],kb:2.2,sfx:'swingh',hs:'punch1',stun:17,bs:9,hsF:8,ch:['upper','round','sweep']},
+ upper:{anim:'upper',st:6,act:5,rec:21,dmg:120,box:[0,32,-130,-40],launch:-7.4,kb:1.6,knock:1,sfx:'swingh',hs:'upper',stun:30,bs:12,hsF:11,big:1,aa:1},
+ kick:{anim:'kick',st:6,act:3,rec:12,dmg:65,box:[10,54,-68,-38],kb:2.2,sfx:'swing',hs:'kick0',stun:16,bs:9,hsF:8,ch:['round','sweep']},
+ round:{anim:'round',st:8,act:4,rec:16,dmg:95,box:[8,50,-98,-64],kb:3.6,knock:1,launch:-3.6,sfx:'swingh',hs:'kick1',stun:26,bs:14,hsF:11,big:1},
+ sweep:{anim:'sweep',st:7,act:4,rec:19,dmg:70,box:[8,54,-16,0],low:1,knock:1,trip:1,kb:1.2,launch:-2.2,sfx:'swing',hs:'kick0',stun:26,bs:10,hsF:9,crouch:1},
+ lowpunch:{anim:'lowpunch',st:4,act:2,rec:7,dmg:35,box:[8,42,-62,-42],kb:1.1,sfx:'swing',hs:'punch0',stun:12,bs:5,hsF:6,crouch:1,ch:['lowpunch','jab','sweep','cross','upper']},
+ airkick:{anim:'airkick',st:4,act:30,rec:0,dmg:75,box:[6,44,-52,-12],kb:2.2,air:1,over:1,sfx:'swing',hs:'kick1',stun:20,bs:12,hsF:8},
+ airpunch:{anim:'airpunch',st:3,act:30,rec:0,dmg:60,box:[6,40,-68,-34],kb:1.8,air:1,over:1,sfx:'swing',hs:'punch1',stun:19,bs:11,hsF:7},
+ throw:{anim:'throw',st:3,act:3,rec:20,dmg:120,box:[4,36,-90,-20],throw:1,knock:1,kb:3.5,launch:-4.6,sfx:'swingh',hs:'punch2',stun:30,hsF:12},
 };
+const BUF=8;// input buffer, frames
+const JUGGLE=3;// max extra hits on an airborne opponent
 // specials: per character [motion, handler]. Motions are numpad tokens relative to facing (6=toward, 4=back, 2=down)
 const SPECIALS={
  raze:[{n:'RISING TALON',m:'626',fn:'talon'},{n:'FRAG TOSS',m:'26',fn:'frag'}],
@@ -33,14 +37,14 @@ const PLAYER_AI={raze:{sp:['frag','talon']},brick:{sp:['rush','quake']},nova:{sp
 function scaleOf(id){return 0.95*(SPR.C[id].hScale||1)}
 class Fighter{
  constructor(id,x,face,ctl){this.id=id;this.cs=SPR.C[id];this.name=this.cs.name;this.x=x;this.y=0;this.vx=0;this.vy=0;this.face=face;this.ctl=ctl;// ctl: player index or 'ai'
-  this.maxhp=(BOSS[id]&&BOSS[id].hp)||1000;this.hp=this.maxhp;this.trail=this.hp;this.S=scaleOf(id);this.set('idle');this.hist=[];this.hcount=0;this.combo=0;this.freeze=0;this.inv=0;this.phase=1;this.ai={t:0,think:0,plan:null}}
+  this.maxhp=(BOSS[id]&&BOSS[id].hp)||1000;this.hp=this.maxhp;this.trail=this.hp;this.S=scaleOf(id);this.set('idle');this.hist=[];this.hcount=0;this.combo=0;this.freeze=0;this.inv=0;this.phase=1;this.ai={t:0,think:0,plan:null};this.buf={};this.clock=0;this.jug=0;this.chain=0}
  set(a,keep){if(this.anim===a&&keep)return;this.anim=a;this.at=0}
  get air(){return this.y<0||this.vy<0}
  frame(){const A=ANIM.A[this.anim];if(this.move){const m=this.move,t=this.mt;const n=A.f.length;let i;
    if(m.st!==undefined){const hi=A.hit||Math.min(1,n-1);if(t<m.st)i=Math.min(hi-1,Math.floor(t/m.st*hi));else if(t<m.st+m.act)i=hi;else i=Math.min(n-1,hi+1+Math.floor((t-m.st-m.act)/Math.max(1,m.rec)*(n-hi-1)))}else i=Math.min(n-1,Math.floor(t/60*A.fps));return clamp(i,0,n-1)}
   const i=Math.floor(this.at/60*A.fps);return A.loop?i%A.f.length:Math.min(A.f.length-1,i)}
  sprite(){const fi=this.frame();const P=ANIM.A[this.anim].f[fi];return SPR.render(this.id,this.glowP?Object.assign({},P,{glow:1}):P,this.S,this.face<0,this.anim+fi+(this.glowP?'g':''))}
- hurt(){const S=this.S;if(this.state=='down'||this.state=='knock'&&this.y>=-4)return null;let top=this.crouch?-62:this.air?-80:-94;if(this.anim=='flip'||this.anim=='jump')top=-80;return[this.x-12*S,this.x+12*S,this.y+top*S,this.y]}
+ hurt(){const S=this.S;if(this.state=='down'||this.state=='knock'&&this.y>=-4)return null;if(this.state=='knock'&&(this.jug||0)>=JUGGLE)return null;let top=this.crouch?-62:this.air?-80:-94;if(this.anim=='flip'||this.anim=='jump')top=-80;return[this.x-12*S,this.x+12*S,this.y+top*S,this.y]}
 }
 const Duel={
  start(cfg){// cfg:{stage, boss, players:[{pl,id}], onEnd}
@@ -51,7 +55,7 @@ const Duel={
  activePlayer(){const ps=this.cfg.players.filter(p=>!p.out);return ps.length?ps[this.round%ps.length]:this.cfg.players[0]},
  newRound(){const D=this;D.round++;D.ap=D.activePlayer();const p=D.ap;
   D.p=new Fighter(p.id,D.W/2-60,1,p.pl);D.boss.x=D.W/2+60;D.boss.y=0;D.boss.vx=D.boss.vy=0;D.boss.hp=D.boss.trail=D.boss.maxhp;D.boss.face=-1;D.boss.move=null;D.boss.state=null;D.boss.set('idle');D.boss.freeze=0;D.boss.phase=1;D.boss.dizzy=0;D.boss.glowP=0;D.boss.speedK=1;
-  D.cam=D.W/2-160;D.timer=60;D.tick=0;D.state='intro';D.st=0;D.proj=[];D.slowmo=0;D.koBy=null;D.endIt=0;D.finisher=null;D.p.combo=D.boss.combo=0;
+  D.cam=D.W/2-160;D.timer=60;D.tick=0;D.state='intro';D.st=0;D.proj=[];D.slowmo=0;D.koBy=null;D.endIt=0;D.finisher=null;D.p.combo=D.boss.combo=0;D.sparks=[];D.snaps=[];D.chud=null;const Bo=D.boss;Bo.special=null;Bo.hitstun=Bo.blockstun=0;Bo.dash=null;Bo.jsq=0;Bo.tellT=0;Bo.aiSpecial=null;Bo.told=0;Bo.buf={};Bo.jug=0;Bo.chain=0;Bo.inv=0;Bo.ai={t:0,plan:null,wait:0,cd:90,combo:null};
   D.say(D.round>=3&&D.wins[0]==1&&D.wins[1]==1?'FINAL ROUND':'ROUND '+D.round,0);setTimeout(()=>{},0)},
  say(s,t,o={}){this.fxText.push(Object.assign({s,t0:t,life:o.life||70,sc:o.sc||4,c1:o.c1,c2:o.c2,y:o.y??86},o))},
  // ---------- input -> intents ----------
@@ -60,13 +64,23 @@ const Duel={
  matchMotion(f,pat,win){const h=f.hist,now=f.hcount;let j=h.length-1;const tm=(tok,d)=>tok=='2'?(d==1||d==2||d==3):tok=='6'?(d==6||d==3||d==9):tok=='4'?(d==4||d==1||d==7):tok=='5'?d==5:false;
   for(let k=pat.length-1;k>=0;k--){while(j>=0&&!tm(pat[k],h[j].d))j--;if(j<0)return false;if(k==pat.length-1&&now-h[j].t>8&&j==h.length-1&&false)return false;
    while(j-1>=0&&tm(pat[k],h[j-1].d)&&h[j-1].d!==5)j--;if(now-h[j].t>win)return false;j--}return true},
- detectSpecial(f,I,easy){const list=SPECIALS[f.id]||[];for(const s of list){if(this.matchMotion(f,s.m,s.m.length>2?24:16))return s.fn}
-  if(easy){const tok=this.dirTok(f,I);if(tok==2||tok==1||tok==3||tok==4)return list[0]&&list[0].fn;return list[1]&&list[1].fn}return null},
+ // simple specials (direction + SPECIAL) always work; motion inputs (QCF, DP...) also work on controller/keyboard
+ detectSpecial(f,I,easy,tok){const list=SPECIALS[f.id]||[];for(const s of list){if(this.matchMotion(f,s.m,s.m.length>2?24:16))return s.fn}
+  if(easy){tok=tok||this.dirTok(f,I);if(tok==2||tok==1||tok==3||tok==4)return list[0]&&list[0].fn;return list[1]&&list[1].fn}return null},
+ easyOn(f){return f.ctl!=='ai'&&SV.easySpecials!=='off'},
  // ---------- moves ----------
- canAct(f){return !f.move&&!f.hitstun&&!f.blockstun&&f.state!='down'&&f.state!='knock'&&f.state!='getup'&&!f.freeze&&!f.dizzy&&!f.special},
- doMove(f,name){const m=MOVES[name];f.move=Object.assign({name},m);f.mt=0;f.hitDone=false;f.set(m.anim);if(m.sfx)setTimeout(()=>{},0);f.sfxAt=m.st-2},
+ canAct(f){return !f.move&&!f.hitstun&&!f.blockstun&&!f.state&&!f.freeze&&!f.dizzy&&!f.special&&!f.jsq&&!(f.dash&&f.dash.t<f.dash.lock)&&!(f.tellT>0)},
+ doMove(f,name){const m=MOVES[name];f.move=Object.assign({name},m);f.mt=0;f.hitDone=false;f.contact=0;f.connected=0;f.set(m.anim);f.sfxAt=Math.max(1,m.st-2);f.atkId=(f.atkId||0)+1;f.dash=null;
+  if(m.st<=2&&m.sfx)AU.sfx(m.sfx,{vol:0.5})},
+ // buffered press: returns {t,tok} if pressed within BUF frames, and consumes it
+ take(f,k){const b=f.buf&&f.buf[k];if(b&&f.clock-b.t<=BUF){f.buf[k]=null;return b}return null},
+ peek(f,k){const b=f.buf&&f.buf[k];return b&&f.clock-b.t<=BUF?b:null},
+ // which normal a button + direction gives
+ normalFor(f,o,k,tok){const fw=tok==6||tok==3||tok==9,dn=tok==1||tok==2||tok==3;const dist=Math.abs(o.x-f.x);
+  if(k=='x'){if(tok==1)return'lowpunch';if(dn)return'upper';if(fw&&dist<36&&!o.air&&!o.state&&!o.hitstun&&!o.blockstun&&!f.move)return'throw';return fw?'cross':'jab'}
+  if(dn)return'sweep';return fw?'round':'kick'},
  // ---------- specials ----------
- doSpecial(f,fn){const D=this,o=f===D.p?D.boss:D.p,S=f.S,fx=f.face;f.special={fn,t:0};f.move=null;AU.sfx('sp_charge',{vol:0.7});
+ doSpecial(f,fn){const D=this,o=f===D.p?D.boss:D.p,S=f.S,fx=f.face;f.special={fn,t:0};f.move=null;f.dash=null;f.jsq=0;f.tellT=0;f.told=0;f.contact=0;f.atkId=(f.atkId||0)+1;AU.sfx('sp_charge',{vol:0.7});
   const sp=f.special;const proj=(o2)=>D.proj.push(Object.assign({owner:f,x:f.x+fx*30*S,y:f.y-74*S,vx:fx*3,vy:0,g:0,t:0,dmg:90,life:200,r:6},o2));
   const H={
    frag:()=>{f.set('throw');sp.dur=26;sp.at=8;sp.go=()=>{proj({type:'frag',vx:fx*2.6,vy:-3.6,g:0.16,dmg:110,knock:1,y:f.y-90*S});AU.sfx('grenade')}},
@@ -98,20 +112,27 @@ const Duel={
  // ---------- update ----------
  update(){const D=this;D.st++;
   if(D.warm.length){const t0=performance.now();while(D.warm.length&&performance.now()-t0<7){const[id,P,k,fl]=D.warm.shift();SPR.render(id,P,scaleOf(id),fl,k)}}
-  if(FX.hitstop>0){FX.hitstop--;FX.update();return}
+  // sparks and the combo counter keep animating through hitstop so impacts read as a freeze-frame, not a stall
+  for(const s of D.sparks)s.t++;D.sparks=D.sparks.filter(s=>s.t<s.life);if(D.chud)D.chud.t++;
+  if(FX.hitstop>0){FX.hitstop--;FX.update();
+   // input still buffers during hitstop so a combo press made "in the freeze" comes out right after it
+   for(const f of[D.p,D.boss])if(f.ctl!=='ai'){const I=IN[f.ctl]||mkPad();const tok=D.dirTok(f,I);D.pushHist(f,tok);for(const k of['x','b','y','a','lb'])if(I['_'+k])f.buf[k]={t:f.clock,tok}}
+   return}
   if(D.slowmo>0){D.slowmo--;if(D.slowmo%3)return}
   const P=D.p,B=D.boss;
   // intro
   if(D.state=='intro'){if(D.st==2)AU.vo(D.round>=3&&D.wins[0]==1&&D.wins[1]==1?'round3':'round'+Math.min(3,D.round));if(D.st==70){D.say('FIGHT!',D.st,{sc:6,c1:'#ffe060',c2:'#ff2000',life:45});AU.vo('fight')}if(D.st>=95&&!D.warm.length){D.state='fight';D.st=0}}
   const fighting=D.state=='fight';
   if(fighting){D.tick++;if(D.tick%60==0&&D.timer>0){D.timer--;if(D.timer==0)D.timeUp()}}
+  // what the AI "sees" (it reads the player with a human-like delay)
+  D.snaps.push(D.snap(P,B));if(D.snaps.length>40)D.snaps.shift();
   // controls
   for(const f of[P,B]){const o=f===P?B:P;const I=f.ctl==='ai'?D.aiInput(f,o,fighting):IN[f.ctl]||mkPad();D.control(f,o,I,fighting||D.state=='endit')}
   for(const f of[P,B])D.physics(f,f===P?B:P);
-  // push apart
-  const dx=B.x-P.x,min=22*(P.S+B.S)/2;if(Math.abs(dx)<min&&Math.abs(P.y-B.y)<60){const push=(min-Math.abs(dx))/2*sgn(dx||1);P.x-=push;B.x+=push}
+  D.pushApart(P,B);
   // camera
-  const mid=(P.x+B.x)/2;D.cam=clamp(lerp(D.cam,mid-160,0.15),0,D.W-320);for(const f of[P,B])f.x=clamp(f.x,D.cam+12,D.cam+308);
+  const mid=(P.x+B.x)/2;D.cam=clamp(lerp(D.cam,mid-160,0.15),0,D.W-320);for(const f of[P,B]){f.wall=0;const L=D.cam+12,R=D.cam+308;if(f.x<=L){f.x=L;f.wall=-1}if(f.x>=R){f.x=R;f.wall=1}}
+  D.pushApart(P,B,1);
   // attacks
   if(D.state=='fight'||D.state=='endit'){D.resolve(P,B);D.resolve(B,P)}
   D.updProj();FX.update();
@@ -125,66 +146,123 @@ const Duel={
   if(D.state=='done'){D.st>110&&D.finish()}
   if(D.state=='intro'&&D.st==1&&D.round==1){D.say(B.name,0,{sc:2,y:58,life:90,c1:'#fff',c2:'#ff8080'})}
  },
- control(f,o,I,live){const D=this;f.face0=f.face;const tok=D.dirTok(f,I);D.pushHist(f,tok);
+ // push boxes: fighters never overlap; at a wall the free fighter is the one that gets moved
+ pushApart(P,B,wallPass){const dx=B.x-P.x,min=24*(P.S+B.S)/2;if(Math.abs(dx)>=min)return;
+  // a jumper passing over the other's head is allowed to cross
+  const hiA=Math.min(P.y,B.y),lo=Math.max(P.y,B.y);if(lo-hiA>46)return;
+  const dir=dx!==0?sgn(dx):(P.face>0?1:-1),need=min-Math.abs(dx);
+  if(wallPass){if(P.wall&&!B.wall)B.x+=dir*need;else if(B.wall&&!P.wall)P.x-=dir*need;else{P.x-=dir*need/2;B.x+=dir*need/2}}
+  else{P.x-=dir*need/2;B.x+=dir*need/2}},
+ snap(o,f){const m=o.move,sp=o.special;const atk=!!(m&&m.name!='throw'&&o.mt<m.st+m.act&&!o.hitDone)||!!(sp&&sp.hit&&!sp.hitDone&&sp.t<=sp.hit.to);
+  const rng=m?(m.box[1]*o.S+14):sp&&sp.hit?(sp.hit.box[1]*o.S+20):0;
+  return{atk,id:o.atkId,low:!!(m&&m.low)||!!(sp&&sp.hit&&sp.hit.low),over:!!(m&&m.over),rng,whiff:!!(m&&!m.air&&!o.contact&&o.mt>=m.st+m.act)||!!(sp&&sp.t>(sp.hit?sp.hit.to:sp.at+4)&&!sp.hitDone&&sp.dur-sp.t>8),
+   air:o.air&&!o.state,vy:o.vy,x:o.x,y:o.y,down:o.state=='down'||o.state=='getup',stun:o.hitstun>0||o.state=='knock',block:o.blockstun>0}},
+ control(f,o,I,live){const D=this;f.face0=f.face;f.clock=(f.clock||0)+1;const tok=D.dirTok(f,I);D.pushHist(f,tok);
+  if(!f.buf)f.buf={};for(const k of['x','b','y','a','lb'])if(I['_'+k])f.buf[k]={t:f.clock,tok};
   if(f.freeze>0){f.freeze--;return}
   if(D.state=='endit'&&f===D.p&&I._y&&D.matchMotion(f,'662',40)){D.startFatal();return}
-  if(!live){if(!f.air&&!f.move&&f.state!='down'&&f.state!='knock'&&f.anim!='win'&&f.anim!='dizzy'&&f.anim!='getup')f.set(f.anim=='idle'?'idle':'idle',1);return}
+  if(!live){if(!f.air&&!f.move&&f.state!='down'&&f.state!='knock'&&f.anim!='win'&&f.anim!='dizzy'&&f.anim!='getup')f.set('idle',1);return}
   if(f.dizzy){f.set('dizzy',1);return}
-  // facing
-  if(!f.air&&!f.move&&!f.special&&!f.hitstun)f.face=o.x>f.x?1:-1;
   const fw=tok==6||tok==3||tok==9,bk=tok==4||tok==1||tok==7,dn=tok==1||tok==2||tok==3,up=tok>=7;
-  // finisher
-  if(I._y&&D.canAct(f)&&!f.air){const sp=D.detectSpecial(f,I,f.ctl!=='ai'&&(SV.easySpecials===true||SV.easySpecials==='on'||(SV.easySpecials!=='off'&&E.lastInput=='touch')));if(sp){D.doSpecial(f,sp);D.lastSpecial={who:f.id,fn:sp,t:D.st};return}}
-  if(f.ctl==='ai'&&f.aiSpecial&&D.canAct(f)&&!f.air){D.doSpecial(f,f.aiSpecial);f.aiSpecial=null;return}
-  if(!D.canAct(f))return f.blocking=f.blocking&&(f.blockstun>0);
-  f.blocking=!!I.rb&&!f.air;f.crouch=dn&&!f.air;
-  if(f.air){if(I._x&&!f.airAtk){f.airAtk=1;D.doMove(f,'airpunch')}else if(I._b&&!f.airAtk){f.airAtk=1;D.doMove(f,'airkick')}return}
-  const dist=Math.abs(o.x-f.x);
-  if(I._x){if(dn)return D.doMove(f,'upper');if(fw&&dist<34&&!o.air&&o.state!='down'&&o.state!='knock'&&!o.hitstun)return D.startThrow(f,o);return D.doMove(f,fw?'cross':'jab')}
-  if(I._b){if(dn)return D.doMove(f,'sweep');return D.doMove(f,fw?'round':'kick')}
-  if(I._a||up&&I._u){f.vy=-5.7*(f.speedK||1)**0.3;f.vx=fw?1.9:bk?-1.9:0;f.vx*=f.face;f.set(f.vx?'flip':'jump');f.airAtk=0;AU.sfx('jump',{vol:0.5});return}
+  // holding back (or BLOCK) blocks; hold down-back / BLOCK+down to block low
+  f.holdBack=!!I.rb||bk;f.lowGuard=dn;
+  // double-tap dash detection (tap forward/back, release, tap again)
+  let dash=0;const pt=f.ptok||5;
+  if(tok==6&&pt!=6&&pt!=3&&pt!=9){if(f.clock-(f.tapF||-99)<14)dash=1;f.tapF=f.clock}
+  if(tok==4&&pt!=4&&pt!=1&&pt!=7){if(f.clock-(f.tapB||-99)<14)dash=-1;f.tapB=f.clock}
+  if(tok!=5&&tok!=6&&tok!=4){f.tapF=f.tapB=-99}
+  f.ptok=tok;
+  const lb=D.peek(f,'lb');if(lb){dash=(lb.tok==4||lb.tok==1||lb.tok==7)?-1:1}
+  // facing: always face the opponent when free on the ground
+  const free=D.canAct(f)&&!f.air;if(free||f.dash||f.jsq)f.face=o.x>f.x?1:-1;
+  // ---- cancels: a normal that touched (hit or block) can chain into the next normal or a special ----
+  if(f.move&&f.contact&&!f.move.air&&f.mt>=f.move.st&&f.mt<f.move.st+f.move.act+f.move.rec-1){const m=f.move;
+   const ys=D.peek(f,'y');let spc=null;if(ys){spc=D.detectSpecial(f,I,D.easyOn(f),ys.tok)}else if(f.ctl==='ai'&&f.aiSpecial){spc=f.aiSpecial}
+   if(spc){D.take(f,'y');f.aiSpecial=null;f.chain=0;D.doSpecial(f,spc);D.lastSpecial={who:f.id,fn:spc,t:D.st,cancel:1};return}
+   if(m.ch&&(f.chain||0)<4){for(const k of['x','b']){const b=D.peek(f,k);if(!b)continue;const t=b.tok!=5?b.tok:tok;const nm=D.normalFor(f,o,k,t);
+     if(m.ch.includes(nm)&&f.mt>=m.st+m.act-1){D.take(f,k);f.chain=(f.chain||0)+1;D.doMove(f,nm);return}}}}
+  // ---- dash cancels into an attack after its first frames ----
+  if(f.dash&&f.dash.t>=f.dash.lock&&!f.move){for(const k of['x','b']){const b=D.take(f,k);if(b){f.dash=null;const t=b.tok!=5?b.tok:tok;f.chain=0;D.doMove(f,D.normalFor(f,o,k,t));return}}}
+  // ---- special ----
+  if(!f.air&&D.canAct(f)){const ys=D.peek(f,'y');if(ys){const sp=D.detectSpecial(f,I,D.easyOn(f),ys.tok!=5?ys.tok:tok);if(sp){D.take(f,'y');f.chain=0;D.doSpecial(f,sp);D.lastSpecial={who:f.id,fn:sp,t:D.st};return}}}
+  if(f.ctl==='ai'&&f.aiSpecial&&!f.air&&D.canAct(f)){if(f.tellT===undefined||f.tellT<=0&&!f.told){f.tellT=f.aiTell||8;f.told=1}}
+  if(f.tellT>0){f.tellT--;f.vx*=0.6;if(f.tellT<=0&&f.aiSpecial){D.doSpecial(f,f.aiSpecial);f.aiSpecial=null;f.told=0;D.lastSpecial={who:f.id,fn:f.special.fn,t:D.st}}return}
+  if(!D.canAct(f)){f.blocking=f.blockstun>0&&f.holdBack;return}
+  f.crouch=dn&&!f.air;
+  // ---- air ----
+  if(f.air){if(f.ctl==='ai'&&f.ai.jatk&&f.vy>-2&&!f.airAtk){f.ai.jatk=0;f.buf.b={t:f.clock,tok:5}}if(!f.airAtk){const x=D.take(f,'x'),b=x?null:D.take(f,'b');if(x||b){f.airAtk=1;D.doMove(f,x?'airpunch':'airkick')}}return}
+  // ---- ground normals (buffered) ----
+  for(const k of['x','b']){const b=D.take(f,k);if(b){const t=b.tok!=5?b.tok:tok;const nm=D.normalFor(f,o,k,t);f.chain=0;if(nm=='throw')return D.startThrow(f,o);return D.doMove(f,nm)}}
+  // ---- jump (3-frame squat, direction read at take-off) ----
+  if(D.take(f,"a")||(up&&I._u)){f.jsq=3;f.jdir=0;f.set('jsq');f.vx=0;f.airAtk=0;f.upHeld=1;return}
+  if(!up)f.upHeld=0;
+  // ---- dash ----
+  if(dash){D.take(f,'lb');D.startDash(f,dash);return}
+  // ---- block / crouch / walk ----
+  const threat=D.threatened(f,o);f.blocking=!!I.rb||(bk&&threat);
   if(f.blocking){f.set(f.crouch?'cblock':'block',1);f.vx=0;return}
   if(f.crouch){f.set('crouch',1);f.vx=0;return}
   const sp=(f.ctl==='ai'?(D.bdef.spd||1):1)*(f.speedK||1);
-  if(fw){f.vx=1.35*sp*f.face;f.set('walk',1)}else if(bk){f.vx=-1.1*sp*f.face;f.set('walkb',1)}else{f.vx=0;f.set('idle',1)}},
+  if(fw){f.vx=1.85*sp*f.face;f.set('walk',1)}else if(bk){f.vx=-1.5*sp*f.face;f.set('walkb',1)}else{f.vx=0;f.set('idle',1)}},
+ // is an attack (or projectile) coming that holding back should block?
+ threatened(f,o){const m=o.move,sp=o.special,d=Math.abs(o.x-f.x);if(m&&!o.hitDone&&o.mt<m.st+m.act&&d<m.box[1]*o.S+30)return true;if(sp&&sp.hit&&!sp.hitDone&&sp.t<=sp.hit.to&&d<sp.hit.box[1]*o.S+60)return true;
+  return this.proj.some(p=>p.owner===o&&Math.abs(p.x-f.x)<120&&sgn(f.x-p.x)==sgn(p.vx||1))},
+ startDash(f,dir){f.dash={t:0,dir,dur:dir>0?15:17,lock:dir>0?6:12};f.set(dir>0?'dash':'bdash');if(dir<0)f.inv=Math.max(f.inv,6);AU.sfx('swing',{vol:0.25,rate:0.7});FX.burst(f.x-dir*f.face*8,FLOOR-2,5,{c:['#8a7a6a','#5a4a3a'],a:dir*f.face>0?Math.PI:0,spread:1,v0:0.4,v1:1.4,g:-0.02,l0:12,l1:20,type:'smoke',s:2})},
  startThrow(f,o){const D=this;D.doMove(f,'throw');f.throwT=o},
  physics(f,o){const D=this;f.at++;
-  if(f.inv>0)f.inv--;if(f.hitstun>0){f.hitstun--;if(!f.hitstun&&!f.air&&f.state!='knock'&&f.state!='down')f.set('idle')}if(f.blockstun>0)f.blockstun--;
-  if(f.move){const m=f.move;f.mt++;if(f.mt==f.sfxAt&&m.sfx)AU.sfx(m.sfx,{vol:0.55});if(!m.air&&f.mt>=m.st+m.act+m.rec){f.move=null;f.set(m.crouch&&f.crouch?'crouch':'idle')}if(!m.air&&!f.air)f.vx*=0.6}
+  if(f.inv>0)f.inv--;if(f.hitstun>0){f.hitstun--;f.vx*=0.86;if(!f.hitstun&&!f.air&&f.state!='knock'&&f.state!='down'){f.set('idle');f.jug=0}}if(f.blockstun>0){f.blockstun--;f.vx*=0.84}
+  if(f.jsq){f.jsq--;if(!f.jsq){const I=f.ctl==='ai'?(f.aiLast||mkPad()):IN[f.ctl]||mkPad();const t=D.dirTok(f,I);const fw=t==9||t==6,bk=t==7||t==4;const k=(f.speedK||1)**0.3;f.vy=-6.9*k;f.vx=(fw?2.35:bk?-2.35:0)*f.face;if(f.ctl==='ai'&&f.ai.jdir)f.vx=f.ai.jdir*2.35*f.face;f.y=-0.5;f.set(f.vx?'flip':'jump');AU.sfx('jump',{vol:0.4})}}
+  if(f.dash){const d=f.dash;d.t++;const k=1-d.t/d.dur;f.vx=d.dir*f.face*(d.dir>0?4.6:4.2)*Math.max(0,k*1.25);if(d.t>=d.dur){f.dash=null;f.vx=0;f.set('idle')}}
+  if(f.move){const m=f.move;f.mt++;if(f.mt==f.sfxAt&&m.sfx)AU.sfx(m.sfx,{vol:0.5});if(!m.air&&f.mt>=m.st+m.act+m.rec){f.move=null;f.chain=0;f.set(m.crouch&&f.crouch?'crouch':'idle')}if(!m.air&&!f.air)f.vx*=0.7;
+   // small step-in on heavy pokes for weight
+   if(!m.air&&f.mt==m.st-1&&(m.name=='cross'||m.name=='round'))f.vx+=f.face*1.2}
   if(f.special){const s=f.special;s.t++;if(s.t==s.at&&s.go)s.go();if(s.tick)s.tick(s.t);if(s.t<(s.inv||0))f.inv=2;
    if(s.t>=s.dur&&!f.air){f.special=null;f.glowP=0;f.set('idle');f.vx=0}}
-  if(f.state=='knock'){if(!f.air&&f.vy>=0){f.state='down';f.set('down');f.downT=f.hp<=0?9999:34;f.vx=0;AU.sfx('fall',{vol:0.7});FX.burst(f.x,FLOOR,8,{c:['#8a7a6a','#5a4a3a'],v0:0.5,v1:1.6,g:0.05,l0:14,l1:24,type:'smoke',s:2});FX.shake=Math.max(FX.shake,3)}}
-  else if(f.state=='down'){f.downT--;if(f.downT<=0){f.state='getup';f.set('getup');f.getT=26;f.inv=26}}
+  if(f.state=='knock'){if(!f.air&&f.vy>=0){f.state='down';f.set('down');f.jug=0;f.downT=f.hp<=0?9999:30;f.vx=0;AU.sfx('fall',{vol:0.6});FX.burst(f.x,FLOOR,8,{c:['#8a7a6a','#5a4a3a'],v0:0.5,v1:1.6,g:0.05,l0:14,l1:24,type:'smoke',s:2});if(SV.shake!==false)FX.shake=Math.max(FX.shake,3)}}
+  else if(f.state=='down'){f.downT--;if(f.downT<=0){f.state='getup';f.set('getup');f.getT=24;f.inv=24}}
   else if(f.state=='getup'){f.getT--;if(f.getT<=0){f.state=null;f.set('idle')}}
-  // gravity
-  if(f.air||f.vy<0){f.vy+=0.24;f.y+=f.vy;if(f.y>=0){f.y=0;const wasAir=f.vy>1;f.vy=0;if(f.special&&f.special.land){f.special.land();f.special.land=null}if(f.move&&f.move.air){f.move=null}if(wasAir&&f.state!='knock'){AU.sfx('land',{vol:0.4});if(!f.special&&!f.hitstun)f.set('idle')}if(f.state!='knock'&&!f.special)f.vx=0}}
-  f.x+=f.vx;if(!f.air&&!f.special&&f.state!='knock'&&!f.move)f.vx*=0.8;
+  // gravity: snappy jumps, floatier launches so juggles read, specials keep their tuned arcs
+  if(f.air||f.vy<0){f.vy+=f.special?0.24:f.state=='knock'?0.3:0.38;f.y+=f.vy;if(f.y>=0){f.y=0;const wasAir=f.vy>1;f.vy=0;if(f.special&&f.special.land){f.special.land();f.special.land=null}if(f.move&&f.move.air){f.move=null}
+    if(wasAir&&f.state!='knock'){AU.sfx('land',{vol:0.35});if(!f.special&&!f.hitstun){f.set('idle');f.landT=3}FX.burst(f.x,FLOOR,3,{c:['#8a7a6a'],v0:0.3,v1:0.9,g:-0.01,l0:10,l1:16,type:'smoke',s:2})}if(f.state!='knock'&&!f.special)f.vx=0}}
+  f.x+=f.vx;if(!f.air&&!f.special&&f.state!='knock'&&!f.move&&!f.dash)f.vx*=0.8;
   if(f.dizzy>0){f.dizzy--}
  },
  boxW(f,b){const S=f.S;const x0=f.x+f.face*b[0]*S,x1=f.x+f.face*b[1]*S;return[Math.min(x0,x1),Math.max(x0,x1),f.y+b[2]*S,f.y+b[3]*S]},
  ov(a,b){return a&&b&&a[0]<b[1]&&a[1]>b[0]&&a[2]<b[3]&&a[3]>b[2]},
+ // can o block right now? (free on the ground, or already in blockstun)
+ canBlock(o){return !o.air&&(o.blockstun>0||(!o.move&&!o.special&&!o.hitstun&&!o.state&&!o.jsq&&!o.dizzy&&!o.freeze&&!(o.dash&&o.dash.dir>0)))},
+ guards(o,m){if(!o.holdBack||!this.canBlock(o))return false;return o.lowGuard?!m.over:!m.low},
  resolve(f,o){const D=this;let hb=null,m=null;
   if(f.move&&!f.hitDone){m=f.move;if(f.mt>=m.st&&f.mt<m.st+m.act)hb=D.boxW(f,m.box)}
   else if(f.special&&f.special.hit&&!f.special.hitDone){const h=f.special.hit,t=f.special.t;if(t>=h.from&&t<=h.to){m=h;hb=D.boxW(f,h.box)}}
   if(!hb)return;const hu=o.hurt();if(!hu||o.inv>0)return;if(!D.ov(hb,hu))return;
-  if(f.move)f.hitDone=true;else f.special.hitDone=true;
-  if(m.throw){if(o.air||o.state)return;o.face=-f.face;D.applyHit(f,o,Object.assign({},m,{kb:-3.2,launch:-4.5}),false);f.face=-f.face;o.x+=f.face*-0;return}
-  // blocking: standing blocks everything but lows; crouching blocks everything but overheads
-  const blocked=o.blocking&&!o.air&&((o.crouch&&!m.over)||(!o.crouch&&!m.low));
-  D.applyHit(f,o,m,blocked)},
- applyHit(f,o,m,blocked,px,py){const D=this;const isSp=!MOVES[m.name]&&!m.throw;let dmg=m.dmg;if(o.ctl!=='ai'&&SV.easy)dmg*=0.7;if(o.ctl==='ai')dmg*=1;if(f.ctl==='ai')dmg*=0.75+D.diff*0.35;
-  const hx=px??(o.x-f.face*6),hy=py??(FLOOR+o.y+((m.box?m.box[2]+m.box[3]:-120)/2)*o.S);
-  if(blocked){const chip=isSp?dmg*0.15:0;o.hp=Math.max(o.hp>1?1:0,o.hp-chip);o.blockstun=10;o.vx=f.face*1.6;AU.sfx('block',{vol:0.7});FX.burst(hx,hy,6,{c:['#fff','#a0c0ff'],v0:1,v1:2.5,g:0,l0:6,l1:12});FX.hitstop=3;return}
-  o.hp=Math.max(0,o.hp-dmg);o.hitF=7;o.move=null;o.special=null;o.glowP=0;o.blocking=false;o.dizzy=0;
-  f.combo=(o.hitstun>0||o.state=='knock')?f.combo+1:1;if(f.combo>=3)D.say(f.combo+' HIT COMBO',D.st,{sc:1,life:50,y:46,x:f===D.p?56:264,small:1});
-  const knock=m.knock||o.hp<=0||o.air;
-  if(m.freeze&&o.hp>0){o.freeze=m.freeze;o.frozenT=m.freeze;AU.sfx('laser',{rate:0.5});}
-  if(m.pull){o.x=f.x+f.face*30*f.S;o.hitstun=m.stun||30;o.set('hit');}
-  else if(knock){o.state='knock';o.vy=m.launch||-3.2;o.vx=f.face*(m.kb||2)*0.8;o.y=Math.min(o.y,-1);o.set('knock');o.hitstun=0}
-  else{o.hitstun=m.stun||16;o.vx=f.face*(m.kb||2);o.set(m.low||(m.box&&m.box[2]>-50)?'hitlow':'hit')}
-  FX.hitstop=m.big||knock?7:5;FX.shake=Math.max(FX.shake,knock?4:2);AU.sfx(m.hs||'punch1',{vol:0.85});AU.sfx(o.cs.fem?'hitf':'hitm',{vol:0.6,gap:0.12});
-  D.blood(hx,hy,f.face,(m.big||knock?14:7)*(m.blood||1));
-  FX.burst(hx,hy,5,{c:['#ffffff','#ffe080'],v0:1.5,v1:3,g:0,l0:4,l1:8,s:2})},
+  if(f.move)f.hitDone=true;else f.special.hitDone=true;f.contact=1;
+  if(m.throw){if(o.air||o.state)return;
+   // throw tech: both throwing at once breaks it
+   if(o.move&&o.move.name=='throw'&&o.mt<=m.st+3){o.move=null;f.move=null;o.vx=f.face*3;f.vx=-f.face*3;o.blockstun=12;f.blockstun=12;D.spark((f.x+o.x)/2,FLOOR+o.y-60*o.S,1,1);AU.sfx('block',{vol:0.5});D.say('BREAK',D.st,{small:1,x:(f.x+o.x)/2-D.cam,y:60,life:40});return}
+   o.face=-f.face;o.blockstun=0;o.blocking=false;D.applyHit(f,o,Object.assign({},m,{kb:-3.2,launch:-4.6,name:'throw'}),false);f.face=-f.face;return}
+  const blocked=D.guards(o,m);D.applyHit(f,o,m,blocked)},
+ applyHit(f,o,m,blocked,px,py){const D=this;const isSp=!MOVES[m.name]&&!m.throw;let dmg=m.dmg;if(o.ctl!=='ai'&&SV.easy)dmg*=0.7;if(f.ctl==='ai')dmg*=0.75+D.diff*0.35;
+  const hx=px??(o.x-f.face*6),hy=py??(FLOOR+o.y+((m.box?m.box[2]+m.box[3]:-120)/2)*o.S);const shakeOK=SV.shake!==false;
+  // pushback: if the defender is pinned at a wall the attacker slides back instead
+  const push=(v)=>{if(o.wall&&o.wall==f.face){f.vx=-f.face*v*0.9;o.vx=0}else o.vx=f.face*v};
+  if(blocked){const chip=isSp?dmg*0.18:0;o.hp=Math.max(0,o.hp-chip);o.blockstun=m.bs||12;o.blocking=true;o.set(o.lowGuard?'cblock':'block');o.jug=0;push((m.kb||2)*0.7+1);f.combo=0;
+   AU.sfx('block',{vol:0.45,rate:0.9});D.spark(hx,hy,isSp?1:0.7,1);FX.hitstop=isSp?6:5;if(shakeOK)FX.shake=Math.max(FX.shake,1);return}
+  const inCombo=o.hitstun>0||o.state=='knock';f.combo=inCombo?f.combo+1:1;if(!inCombo)f.comboDmg=0;
+  // damage scaling: hit 2 = 90%, hit 3 = 80% ... floor 35%; juggle hits a further 85%
+  let sc=f.combo<=1?1:Math.max(0.35,1-0.1*(f.combo-1));if(o.state=='knock'&&o.air)sc*=0.85;dmg=Math.round(dmg*sc);
+  o.hp=Math.max(0,o.hp-dmg);f.comboDmg=(f.comboDmg||0)+dmg;o.hitF=6;o.move=null;o.special=null;o.dash=null;o.jsq=0;o.tellT=0;o.told=0;o.aiSpecial=null;o.glowP=0;o.blocking=false;o.dizzy=0;o.chain=0;
+  if(f.combo>=2)D.chud={f,n:f.combo,dmg:f.comboDmg,t:0};
+  const juggle=o.state=='knock'&&o.air;const knock=m.knock||o.hp<=0||o.air;
+  if(m.freeze&&o.hp>0){o.freeze=m.freeze;o.frozenT=m.freeze;AU.sfx('laser',{rate:0.5,vol:0.6})}
+  if(m.pull){o.x=f.x+f.face*30*f.S;o.hitstun=m.stun||30;o.set('hit')}
+  else if(knock){if(juggle)o.jug=(o.jug||0)+1;else o.jug=0;o.state='knock';const L=(m.launch||-3.4)*(juggle?Math.max(0.55,1-0.15*o.jug):1);o.vy=Math.min(L,juggle?-2.6:-2);o.vx=f.face*(m.kb||2)*(m.launch<-5?0.4:0.8);o.y=Math.min(o.y,-1);o.set('knock');o.hitstun=0;if(m.trip){o.vx*=0.5}}
+  else{o.hitstun=Math.round((m.stun||16)*Math.max(0.6,1-0.07*Math.max(0,(f.combo||0)-2)));push(m.kb||2);o.set(m.low||(m.box&&m.box[2]>-50)?'hitlow':'hit')}
+  const heavy=m.big||knock||isSp;FX.hitstop=o.hp<=0?16:m.hsF||(heavy?10:6);if(shakeOK)FX.shake=Math.max(FX.shake,o.hp<=0?6:heavy?3.5:1.5);
+  AU.sfx(m.hs||'punch1',{vol:heavy?0.8:0.68,rate:heavy?0.92:1});AU.sfx(o.cs.fem?'hitf':'hitm',{vol:0.5,gap:0.18});
+  D.blood(hx,hy,f.face,(heavy?12:6)*(m.blood||1));D.spark(hx,hy,heavy?1.4:0.9,0,f.face)},
+ // impact spark: radial streaks + a soft core flash (blue for blocks)
+ spark(x,y,sz,blk,dir){this.sparks.push({x,y,sz,blk,dir:dir||1,t:0,life:blk?9:12,a:Math.random()*6})},
  blood(x,y,dir,n){if(!SV.blood){FX.burst(x,y,Math.ceil(n/2),{c:['#ffffff','#ffd060','#ff9020'],v0:1,v1:3,g:0.05,l0:8,l1:16});return}
   FX.burst(x,y,n,{a:dir>0?-0.6:-2.5,spread:1.8,c:['#c00010','#8a0008','#e01818','#600006'],v0:1.2,v1:3.6,g:0.2,l0:60,l1:200,floor:FLOOR+rnd(-3,6),stick:1,s:2});FX.burst(x,y,Math.ceil(n/2),{c:['#a00010','#d01020'],v0:0.3,v1:1.4,g:0.15,l0:30,l1:60,s:1})},
  updProj(){const D=this;for(const p of D.proj){p.t++;p.vy+=p.g||0;p.x+=p.vx;p.y+=p.vy;const o=p.owner===D.p?D.boss:D.p;
@@ -222,27 +300,51 @@ const Duel={
   if(F.t==230){D.result='win';D.fatal=true;D.state='done';D.st=100}},
  finish(){const D=this;if(D.ended)return;D.ended=1;D.cfg.onEnd&&D.cfg.onEnd({result:D.result,fatal:!!D.fatal,perfect:false,loserPl:D.ap.pl,stage:D.stage})},
  // ---------- AI ----------
- aiInput(f,o,live){const D=this,I=mkPad(),a=f.ai,d=D.diff,bd=D.bdef;if(!live||f.freeze)return I;const dist=Math.abs(o.x-f.x),fw=f.face>0?'r':'l',bk=f.face>0?'l':'r';
-  a.t++;// keep plan for a few frames
-  // khan phase 2
-  if(f.id=='khan'&&f.phase==1&&f.hp<f.maxhp*0.5){f.phase=2;f.speedK=1.25;D.say('IRON KHAN UNLEASHED',D.st,{sc:1,life:90,y:56});AU.vo('warning');FX.flash=6;FX.flashC='#ff3000';f.inv=30;f.glowP=1}
-  // defence: react to attacks
-  const threat=(o.move&&o.mt<o.move.st+o.move.act)||(o.special&&o.special.hit&&o.special.t<o.special.hit.to);const pj=D.proj.find(p=>p.owner===o&&Math.abs(p.x-f.x)<90&&sgn(f.x-p.x)==sgn(p.vx));
-  if((threat&&dist<70||pj)&&D.canAct(f)){if(!a.defRoll||a.t-a.defT>20){a.defT=a.t;a.defRoll=Math.random()}
-   if(a.defRoll<bd.blk*(0.6+d*0.6)){I.rb=1;if((o.move&&o.move.low)||(pj&&pj.low))I.d=1;if(pj&&pj.low&&a.defRoll<0.15){I.rb=0;I.a=I._a=1}return I}}
-  // anti-air
-  if(o.air&&dist<75&&o.vy>-2&&D.canAct(f)&&Math.random()<bd.aa*0.25*(0.5+d)){I.d=1;I.x=I._x=1;return I}
-  if(a.wait>0){a.wait--;if(a.plan=='walk')I[fw]=1;if(a.plan=='back')I[bk]=1;if(a.plan=='crouch')I.d=1;if(a.plan=='block')I.rb=1;return I}
-  if(!D.canAct(f))return I;
-  const agg=bd.agg*(0.7+d*0.5),r=Math.random();
-  // punish recovering opponent
-  if(o.move&&o.mt>o.move.st+o.move.act&&dist<50&&Math.random()<0.25+d*0.4){I.d=dist<36;I.x=I._x=1;return I}
-  if(o.state=='getup'||o.state=='down'){a.plan='walk';a.wait=dist>60?10:0;if(dist<=60){a.plan='back';a.wait=8}return I}
-  if(dist>110){if(r<bd.spc*0.12*(0.6+d)){f.aiSpecial=pick(bd.sp.filter(s=>s!='shock'||dist<90));return I}if(r<0.05+agg*0.08){a.plan='walk';a.wait=ri(12,30);return I}if(r<0.08){I.a=I._a=1;I[fw]=1;return I}return I}
-  if(dist>48){if(r<bd.spc*0.06){f.aiSpecial=pick(bd.sp);return I}if(r<agg*0.06){a.plan='walk';a.wait=ri(8,20);return I}if(r<agg*0.08){I.b=I._b=1;I[fw]=1;return I}if(r<agg*0.1){I.a=I._a=1;I[fw]=1;a.jumpAtk=1;return I}if(r<0.11){a.plan='back';a.wait=ri(6,16)}return I}
-  // close range
-  if(f.air){if(a.jumpAtk){I.b=I._b=1;a.jumpAtk=0}return I}
-  const c=Math.random();if(c<agg*0.08){I.x=I._x=1;if(Math.random()<0.4)I[fw]=1}else if(c<agg*0.13){I.b=I._b=1;if(Math.random()<0.4)I.d=1}else if(c<agg*0.15){I.d=1;I.x=I._x=1}else if(c<agg*0.16+0.01){if(bd.sp.includes('shock')||bd.sp.includes('machete')||bd.sp.includes('slide')||bd.sp.includes('rush'))f.aiSpecial=pick(bd.sp)}else if(c<0.2){I[fw]=1;I.x=I._x=1}else if(c<0.23){a.plan='block';a.wait=ri(8,20)}else if(c<0.26){a.plan='back';a.wait=ri(6,14)}
+ // AI: reads the player from a delayed snapshot (human-like reaction), commits to short plans,
+ // blocks once per attack (no per-frame dice), punishes whiffs, anti-airs, and only continues combos that hit.
+ aiInput(f,o,live){const D=this,I=mkPad(),a=f.ai,bd=D.bdef;f.aiLast=I;if(!live||f.freeze)return I;
+  // difficulty ramps by round and as the boss gets desperate
+  const d=clamp(D.diff+(D.round-1)*0.08+(f.hp<f.maxhp*0.35?0.1:0),0,1.2);
+  const dist=Math.abs(o.x-f.x),fw=f.face>0?'r':'l',bk=f.face>0?'l':'r';a.t++;if(a.cd>0)a.cd--;
+  if(f.id=='khan'&&f.phase==1&&f.hp<f.maxhp*0.5){f.phase=2;f.speedK=1.2;D.say('IRON KHAN UNLEASHED',D.st,{sc:1,life:90,y:56});AU.vo('warning');FX.flash=6;FX.flashC='#ff3000';f.inv=30;f.glowP=1}
+  const react=Math.round(clamp(22-d*12,8,22));const S=D.snaps[Math.max(0,D.snaps.length-1-react)]||{};
+  const press=k=>{I[k]=1;I['_'+k]=1};const sp=(bd.sp||[]).filter(Boolean);
+  // --- combo continuation: only if the last hit connected ---
+  if(a.combo){if(f.move&&f.contact&&o.hitstun>0){const nx=a.combo.shift();if(nx){if(nx=='SP'){if(sp.length)f.aiSpecial=pick(sp.filter(n=>n!='shock'||dist<90))||sp[0];f.tellT=0;f.told=1}else{if(nx.d)I.d=1;if(nx.f)I[fw]=1;press(nx.k)}}else a.combo=null;return I}
+   if(!f.move)a.combo=null;else return I}
+  // --- defence: decide once per attack whether this one gets blocked ---
+  const pj=D.proj.find(p=>p.owner===o&&Math.abs(p.x-f.x)<110&&sgn(f.x-p.x)==sgn(p.vx||1));
+  const inc=(S.atk&&dist<S.rng+20)||pj;
+  if(inc&&D.canBlock(f)){const id=pj?'p'+D.proj.indexOf(pj):S.id;if(a.defId!==id){a.defId=id;a.defOK=Math.random()<Math.min(0.8,(bd.blk||0.4)*(0.5+0.7*d))}
+   if(a.defOK){I[bk]=1;if(S.low||(pj&&pj.low))I.d=1;return I}}
+  if(o.atkId!==a.seenAtk&&o.move){a.seenAtk=o.atkId;a.press=Math.min(6,(a.press||0)+1)}if(a.t%60==0&&a.press>0)a.press--;
+  if(!D.canAct(f)){if(f.blockstun>0&&a.defOK)I[bk]=1;a.wasStun=f.blockstun>0||f.hitstun>0;if(a.plan=='guard'&&f.blockstun>0){I[bk]=1;if(o.crouch)I.d=1}return I}
+  // --- reversal right out of stun: jab or throw back into a pressuring player ---
+  if(a.wasStun){a.wasStun=0;if(dist<46&&Math.random()<0.3+0.35*d){if(dist<34&&Math.random()<0.4){I[fw]=1;press('x')}else{if(Math.random()<0.4)I.d=1;press('x')}return I}}
+  // --- guard up when the player keeps attacking up close ---
+  if(dist<60&&a.plan!=='guard'&&Math.random()<0.025*(a.press||0)*(0.5+d)){a.plan='guard';a.wait=ri(12,26)}
+  // --- anti-air ---
+  if(S.air&&S.vy>-3&&dist<70&&a.aaId!==o.atkId+'/'+Math.round(o.x/40)){a.aaId=o.atkId+'/'+Math.round(o.x/40);if(Math.random()<(bd.aa||0.4)*(0.5+0.6*d)){I.d=1;press('x');return I}}
+  // --- whiff punish ---
+  if(S.whiff&&dist<62&&Math.random()<0.15+0.35*d){if(dist>40){a.plan='dash';}else{I.d=1;press('x');return I}}
+  // --- wake-up: back off or meaty ---
+  if((o.state=='down'||o.state=='getup')&&!a.wait){a.plan=dist<34?'back':dist>70?'walk':'hold';a.wait=dist<34?3:6}
+  if(a.wait>0){a.wait--;if(a.plan=='guard'){I[bk]=1;if(o.crouch||(o.move&&o.move.low))I.d=1;if(!a.wait)a.plan=null;return I}if(a.plan=='walk')I[fw]=1;if(a.plan=='back')I[bk]=1;if(a.plan=='crouch')I.d=1;return I}
+  if(a.plan=='dash'){a.plan=null;press('lb');return I}
+  // --- neutral plans ---
+  const agg=(bd.agg||0.5)*(0.7+d*0.5);
+  // special: telegraphed, cooldown, chosen by range
+  if(a.cd<=0&&sp.length&&Math.random()<(bd.spc||0.2)*0.08*(0.6+d)){let opts=sp;if(dist<60)opts=sp.filter(n=>/shock|machete|slide|rush|grab|spin|dp|upper|uppercut/.test(n));if(!opts.length)opts=sp;
+   f.aiSpecial=pick(opts);f.aiTell=Math.round(clamp(14-d*6,6,14));a.cd=Math.round(150-d*70+ri(0,40));return I}
+  if(dist>120){const r=Math.random();if(r<0.08+agg*0.08){a.plan='walk';a.wait=ri(20,40)}else if(r<0.1+agg*0.04){a.plan='dash'}else if(r<0.106){a.jdir=1;press('a');I[fw]=1;a.jatk=1}return I}
+  if(dist>52){const r=Math.random();if(r<agg*0.09){a.plan='walk';a.wait=ri(10,20)}else if(r<agg*0.11){a.plan='dash'}else if(r<agg*0.125){I[fw]=1;press('b')}else if(r<agg*0.135){a.jdir=1;press('a');a.jatk=1}else if(r<0.15){a.plan='back';a.wait=ri(3,6)}else if(r<0.165){a.plan='hold';a.wait=ri(4,10)}return I}
+  // close range: pick a combo script (continues only on hit)
+  const r=Math.random();
+  if(r<agg*0.09){const lv=d>0.8?2:d>0.5?1:0;const S3=[[{k:'x'},{k:'x',f:1}],[{k:'x'},{k:'x',f:1},{d:1,k:'x'}],[{k:'x'},{k:'b'},'SP'],[{d:1,k:'x',lp:1},{k:'x'},{d:1,k:'b'}]];
+   const pickS=S3.slice(0,2+lv);const sc=pick(pickS).slice();const first=sc.shift();if(first.d&&first.lp){I[bk]=0;I.d=1;I[bk]=1}else if(first.d)I.d=1;if(first.f)I[fw]=1;press(first.k);a.combo=sc;return I}
+  if(r<agg*0.12){I.d=1;press('b');return I}
+  if(r<agg*0.135&&dist<36){I[fw]=1;press('x');return I}
+  if(r<0.18){a.plan='hold';a.wait=ri(4,9)}else if(r<0.21){a.plan='back';a.wait=ri(3,6)}else if(r<0.22){press('lb');I[bk]=1}
   return I},
  // ---------- draw ----------
  draw(g){const D=this,cx=Math.round(D.cam+(FX.shake?rnd(-FX.shake,FX.shake):0)),cy=FX.shake?Math.round(rnd(-FX.shake,FX.shake)*0.6):0;
@@ -253,16 +355,23 @@ const Duel={
   for(const f of[D.p,D.boss]){if(f.gone)continue;const w=Math.max(8,22*f.S-(-f.y)*0.12);g.fillStyle='rgba(0,0,0,0.35)';g.beginPath();g.ellipse(Math.round(f.x-cx),FLOOR+1+cy,w,3,0,0,7);g.fill()}
   // fighters (attacker on top)
   const order=[D.p,D.boss].sort((a,b)=>(a.move||a.special?1:0)-(b.move||b.special?1:0));
-  for(const f of order){if(f.gone)continue;const s=f.sprite();const x=Math.round(f.x-cx-s.ox),y=Math.round(FLOOR+f.y+cy-s.oy);
+  for(const f of order){if(f.gone)continue;const s=f.sprite();const x=Math.round((f.x-cx-s.ox)*2)/2,y=Math.round((FLOOR+f.y+cy-s.oy)*2)/2;
    if(f.inv>0&&f.state!='getup'&&D.st%4<2&&f.special&&f.special.fn=='ghost'){g.globalAlpha=0.4}
-   g.drawImage(s.c,x,y);g.globalAlpha=1;if(f.hitF>0){f.hitF--;g.globalAlpha=Math.min(1,f.hitF/5);g.drawImage(SPR.flash(s),x,y);g.globalAlpha=1}
+   if(f.tellT>0){g.globalAlpha=0.5*(f.tellT%4<2?1:0.6);g.globalCompositeOperation='lighter';g.drawImage(s.c,x,y);g.globalCompositeOperation='source-over';g.globalAlpha=1}
+   g.drawImage(s.c,x,y);g.globalAlpha=1;if(f.tellT>0){g.globalAlpha=0.35;g.globalCompositeOperation='lighter';g.drawImage(s.c,x,y);g.globalCompositeOperation='source-over';g.globalAlpha=1}if(f.hitF>0){f.hitF--;g.globalAlpha=Math.min(1,f.hitF/5);g.drawImage(SPR.flash(s),x,y);g.globalAlpha=1}
    if(f.freeze>0){g.globalAlpha=0.45;g.fillStyle='#a0e8ff';g.globalCompositeOperation='source-atop';g.globalCompositeOperation='source-over';g.fillRect(x+s.ox-14,y+s.oy-92*f.S,28,92*f.S);g.globalAlpha=1}
    if(f.phase==2&&D.st%6<3){g.globalAlpha=0.25;g.globalCompositeOperation='lighter';g.drawImage(s.c,x,y);g.globalCompositeOperation='source-over';g.globalAlpha=1}
    if(f.dizzy&&D.state=='endit'){for(let i=0;i<3;i++){const a=D.st*0.1+i*2.1;txt(g,'*',f.x-cx+Math.cos(a)*10-2,FLOOR+f.y-100*f.S+Math.sin(a)*3,'#ffe040',{sh:false})}}}
   // projectiles
   for(const p of D.proj)D.drawProj(g,p,cx,cy);
   FX.draw(g,cx,-cy);
+  for(const p of D.sparks){const k=p.t/p.life,x=p.x-cx,y=p.y+cy,R=(6+18*Math.sqrt(k))*p.sz;g.save();g.globalCompositeOperation='lighter';g.globalAlpha=1-k;
+   g.strokeStyle=p.blk?'#90c8ff':'#ffe9a0';g.lineWidth=1;g.beginPath();g.arc(x,y,R*0.8,0,7);g.stroke();
+   g.fillStyle=p.blk?'#c8e4ff':'#fff4c8';for(let i=0;i<6;i++){const an=p.a+i*1.047,r0=R*0.25,r1=R*(i%2?0.8:1.15);g.beginPath();g.moveTo(x+Math.cos(an)*r1,y+Math.sin(an)*r1);g.lineTo(x+Math.cos(an+0.18)*r0,y+Math.sin(an+0.18)*r0);g.lineTo(x+Math.cos(an-0.18)*r0,y+Math.sin(an-0.18)*r0);g.fill()}
+   if(p.t<3){g.fillStyle='#ffffff';g.beginPath();g.arc(x,y,4*p.sz*(1-p.t/3)+1,0,7);g.fill()}g.restore()}
   D.hud(g);
+  if(D.chud&&D.chud.t<80){const c=D.chud,left=c.f===D.p,x=left?10:310,a=c.t>60?1-(c.t-60)/20:1,pop=c.t<6?1+(6-c.t)*0.08:1;g.globalAlpha=a;
+   big(g,c.n+' HITS',left?60:260,58,c.n>=5?3:2,{c1:c.n>=5?'#ffb040':'#fff0a0',c2:'#c03000',sx:pop>1?pop:0});txt(g,c.dmg+' DMG',left?60:260,76,'#ffffff',{a:'c',s:1});g.globalAlpha=1}
   for(const t of D.fxText){const age=D.st-t.t0;if(age<0)continue;if(age>t.life){t.dead=1;continue}
    if(t.small){txt(g,t.s,t.x,t.y,'#ffe040',{a:'c'});continue}
    const sx=age<8?0.3+age/8*0.7:1;big(g,t.s,160,t.y-(t.sc*7)/2,t.sc,{c1:t.c1,c2:t.c2,sx})}
