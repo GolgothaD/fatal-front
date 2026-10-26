@@ -44,19 +44,22 @@ const IN=[mkPad(),mkPad()];IN.src=['kb','none'];
 const kbState={};const KB1={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d',KeyZ:'a',Space:'a',KeyX:'x',KeyJ:'x',KeyC:'b',KeyK:'b',KeyV:'y',KeyL:'y',ShiftLeft:'rb',ShiftRight:'rb',Enter:'start',Escape:'start',Backspace:'back'};
 addEventListener('keydown',e=>{if(KB1[e.code]){kbState[KB1[e.code]]=1;e.preventDefault();E.lastInput='kb';AU.unlock()}});
 addEventListener('keyup',e=>{if(KB1[e.code]){kbState[KB1[e.code]]=0}});
-const touchState={};let stick={id:null,x:0,y:0};// driven by touch.js (TC)
+const touchState={},touchLatch={};let stick={id:null,x:0,y:0};// driven by touch.js (TC)
 let padPrev=[[],[]];E.pads=0;E.fakePads=null;
 function readPads(){const ps=(E.fakePads||(navigator.getGamepads?navigator.getGamepads():[])||[]);const out=[];for(const p of ps)if(p&&p.connected!==false)out.push(p);E.pads=out.length;return out}
 function pollInput(){const pads=readPads();
  // P1: keyboard + touch + first pad; P2: second pad (or first pad if P1 uses keyboard and co-op chose that)
- const s=[{},{}];BTN.forEach(k=>{s[0][k]=(kbState[k]||touchState[k])?1:0;s[1][k]=0});let ax=[0,0],ay=[0,0];
+ const s=[{},{}];BTN.forEach(k=>{s[0][k]=(kbState[k]||touchState[k]||touchLatch[k])?1:0;touchLatch[k]=0;s[1][k]=0});let ax=[0,0],ay=[0,0];
  if(stick.id!==null){ax[0]=stick.x;ay[0]=stick.y}
  const map=E.padMap||[0,1];
  pads.forEach((p,i)=>{const pl=map.indexOf(i);if(pl<0)return;const b=j=>p.buttons[j]&&(p.buttons[j].pressed||p.buttons[j].value>0.5)?1:0;const t=s[pl];
   const x=p.axes[0]||0,y=p.axes[1]||0;if(Math.hypot(x,y)>0.3){ax[pl]=x;ay[pl]=y}
   t.a|=b(0);t.b|=b(1);t.x|=b(2);t.y|=b(3);t.rb|=b(5)|b(4)|b(7);t.start|=b(9);t.back|=b(8);t.u|=b(12);t.d|=b(13);t.l|=b(14);t.r|=b(15);
   if(BTN.some(k=>t[k])||Math.hypot(x,y)>0.3){E.lastInput='pad';AU.unlock()}});
- for(let pl=0;pl<2;pl++){const t=s[pl];if(Math.hypot(ax[pl],ay[pl])>(pl==0&&stick.id!==null?0.05:0.35)){const a=Math.atan2(ay[pl],ax[pl]),oct=Math.round(a/(Math.PI/4));const dx=Math.round(Math.cos(oct*Math.PI/4)),dy=Math.round(Math.sin(oct*Math.PI/4));if(dx<0)t.l=1;if(dx>0)t.r=1;if(dy<0)t.u=1;if(dy>0)t.d=1}
+ for(let pl=0;pl<2;pl++){const t=s[pl];const ts=pl==0&&stick.id!==null,mg=Math.hypot(ax[pl],ay[pl]);
+  // touch stick: wide horizontal band (±30°) so running never slips into crouch/aim-up; vertical band ±25°
+  if(ts){if(mg>0.04){const cx=ax[pl]/mg,cy=ay[pl]/mg;if(Math.abs(cx)>0.42){if(cx<0)t.l=1;else t.r=1}if(Math.abs(cy)>0.5){if(cy<0)t.u=1;else t.d=1}}}
+  else if(Math.hypot(ax[pl],ay[pl])>(pl==0&&stick.id!==null?0.05:0.35)){const a=Math.atan2(ay[pl],ax[pl]),oct=Math.round(a/(Math.PI/4));const dx=Math.round(Math.cos(oct*Math.PI/4)),dy=Math.round(Math.sin(oct*Math.PI/4));if(dx<0)t.l=1;if(dx>0)t.r=1;if(dy<0)t.u=1;if(dy>0)t.d=1}
   const I=IN[pl];BTN.forEach(k=>{const v=t[k]?1:0;I['_'+k]=v&&!I[k]?1:0;I['r_'+k]=!v&&I[k]?1:0;I[k]=v});I.ax=ax[pl];I.ay=ay[pl]}}
 const pressed=(k,pl)=>pl===undefined?(IN[0]['_'+k]||IN[1]['_'+k]):IN[pl]['_'+k];
 const held=(k,pl)=>pl===undefined?(IN[0][k]||IN[1][k]):IN[pl][k];

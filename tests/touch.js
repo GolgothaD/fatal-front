@@ -10,7 +10,7 @@ await p.evaluate(()=>{FF.Game.go('options')});await W8(200);await p.evaluate(()=
 ok(await p.evaluate(()=>TC.editing&&getComputedStyle(document.getElementById('tcpanel')).display!='none'),'editor open');
 const a0=await C('a');await T('touchStart',[a0]);for(let i=1;i<=8;i++){await T('touchMove',[[a0[0]-i*10,a0[1]-i*25]]);await W8(16)}await T('touchEnd',[]);await W8(100);
 const a1=await C('a');ok(Math.abs(a1[1]-(a0[1]-200))<30,'drag moved A '+a0+' -> '+a1);
-await p.screenshot({path:'/workspace/qa/fatalfront/v2/touch_editor.png'});
+await p.screenshot({path:'/workspace/qa/fatalfront/v4/touch_editor.png'});
 await p.click('#tc-float');await p.evaluate(()=>{const s=document.getElementById('tc-dead');s.value=30;s.dispatchEvent(new Event('input',{bubbles:true}))});
 await p.click('#tc-done');await W8(150);ok(!(await p.evaluate(()=>TC.editing)),'editor closed');
 await load();const a2=await C('a');ok(Math.abs(a2[1]-a1[1])<3,'persist across reload '+a1+' vs '+a2);

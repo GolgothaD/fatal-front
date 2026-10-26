@@ -6,8 +6,8 @@ const IDS=['stick','a','x','b','y','rb','start'];
 const NAME={stick:'MOVE STICK',a:'A · JUMP',x:'X · SHOOT / PUNCH',b:'B · KICK / LOCK',y:'Y · SPECIAL / GRENADE',rb:'RB · SWAP / BLOCK',start:'PAUSE'};
 const LBL={run:{a:'JUMP',x:'SHOOT',b:'LOCK',y:'GRENADE',rb:'SWAP',start:'❚❚'},duel:{a:'JUMP',x:'PUNCH',b:'KICK',y:'SPECIAL',rb:'BLOCK',start:'❚❚'},menu:{a:'OK',x:'OK',b:'BACK',y:'',rb:'',start:'❚❚'}};
 const COL={a:'40,170,70',x:'50,110,235',b:'225,55,45',y:'235,185,25',rb:'120,120,135',start:'120,120,135'};
-let cfg={stickMode:'fixed',dead:0.15,haptics:true,layouts:{}};
-try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&typeof s=='object')cfg=Object.assign(cfg,s);if(!cfg.layouts||typeof cfg.layouts!='object')cfg.layouts={}}catch(e){}
+let cfg={stickMode:'floating',dead:0.1,haptics:true,layouts:{},v4:1};
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&typeof s=='object')cfg=Object.assign(cfg,s);if(!cfg.layouts||typeof cfg.layouts!='object')cfg.layouts={};if(!cfg.v4){cfg.v4=1;cfg.stickMode='floating';cfg.dead=Math.min(cfg.dead,0.1)}}catch(e){}
 let saveT=0;function persist(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(cfg))}catch(e){}},120)}
 function persistNow(){clearTimeout(saveT);try{localStorage.setItem(KEY,JSON.stringify(cfg))}catch(e){}}
 let root,els={},panel,cur={},editing=false,sel='a',mode='run',lkey='';
@@ -36,26 +36,29 @@ function place(){if(!root||!E.layout)return;lkey=key();const L=E.layout;const la
  if(panel)panelSync()}
 function store(){const L=E.layout,o={};for(const k of IDS){const c=cur[k];o[k]={x:c.x/L.W,y:c.y/L.H,s:Math.round(c.s),o:Math.round(c.o*100)/100}}cfg.layouts[lkey]=o;persist()}
 // ---------- input ----------
-function hitBtn(x,y){let best=null,bd=1e9;for(const k of IDS){if(k=='stick')continue;const c=cur[k];const d=Math.hypot(x-c.x,y-c.y);if(d<c.s/2*1.15&&d<bd){bd=d;best=k}}return best}
+// generous hit areas: nearest button (relative to its size) within 1.45x its radius
+function hitBtn(x,y,only){let best=null,bd=1e9;for(const k of IDS){if(k=='stick'||only&&!only.includes(k))continue;const c=cur[k];const d=Math.hypot(x-c.x,y-c.y)/(c.s/2);if(d<1.45&&d<bd){bd=d;best=k}}return best}
 function inStick(x,y){const c=cur.stick;if(!c)return false;const d=Math.hypot(x-c.x,y-c.y);return cfg.stickMode=='floating'?d<c.s*0.75*1.5:d<c.s/2*1.3}
 function buzz(){if(cfg.haptics&&navigator.vibrate)try{navigator.vibrate(12)}catch(e){}}
 function recompute(){for(const k of['a','x','b','y','rb','start'])touchState[k]=0;for(const p of ptr.values())if(p.kind=='btn'&&p.k)touchState[p.k]=1;touchState.back=mode=='menu'?touchState.b:0;
  for(const k of['a','x','b','y','rb','start'])els[k].classList.toggle('on',!!touchState[k])}
-function stickMove(p,x,y){const c=cur.stick,R=c.s*0.42;let dx=x-p.ox,dy=y-p.oy;const m=Math.hypot(dx,dy);if(m>R){dx*=R/m;dy*=R/m}const n=Math.min(1,m/R),dz=cfg.dead;const v=n<dz?0:(n-dz)/(1-dz);const a=Math.atan2(dy,dx);stick.x=m?Math.cos(a)*v:0;stick.y=m?Math.sin(a)*v:0;
- els.knob.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`}
+function stickMove(p,x,y){const c=cur.stick,R=c.s*0.42;let dx=x-p.ox,dy=y-p.oy;let m=Math.hypot(dx,dy);if(m>R){const k=(m-R)/m;p.ox+=dx*k;p.oy+=dy*k;dx=x-p.ox;dy=y-p.oy;m=R;if(cfg.stickMode=='floating'){els.stick.style.left=p.ox+'px';els.stick.style.top=p.oy+'px'}}const n=Math.min(1,m/R),dz=cfg.dead;const v=n<dz?0:(n-dz)/(1-dz);const a=Math.atan2(dy,dx);stick.x=m?Math.cos(a)*v:0;stick.y=m?Math.sin(a)*v:0;
+ if(!stickRaf){stickRaf=requestAnimationFrame(()=>{stickRaf=0;els.knob.style.transform=`translate(calc(-50% + ${kdx}px),calc(-50% + ${kdy}px))`})}kdx=dx;kdy=dy}
+let stickRaf=0,kdx=0,kdy=0;
 function down(e){if(!root||e.target.closest&&e.target.closest('#tcpanel'))return;const x=e.clientX,y=e.clientY;
  if(editing){editDown(e);return}
  if(!document.body.classList.contains('hastouch')&&e.pointerType!='touch')return;
  if(ptr.has(e.pointerId))return;
- const k=hitBtn(x,y);if(k){E.touch=true;E.lastInput='touch';AU.unlock();ptr.set(e.pointerId,{kind:'btn',k});buzz();recompute();e.preventDefault();e.stopPropagation();return}
+ const k=hitBtn(x,y);if(k){E.touch=true;E.lastInput='touch';AU.unlock();ptr.set(e.pointerId,{kind:'btn',k});touchLatch[k]=1;if(k=='b'&&mode=='menu')touchLatch.back=1;buzz();recompute();e.preventDefault();e.stopPropagation();return}
  if(stick.id===null&&inStick(x,y)&&(e.pointerType=='touch'||E.touch)){E.touch=true;E.lastInput='touch';AU.unlock();const c=cur.stick;const fl=cfg.stickMode=='floating';const p={kind:'stick',ox:fl?x:c.x,oy:fl?y:c.y};ptr.set(e.pointerId,p);stick.id=e.pointerId;
   if(fl){els.stick.style.left=x+'px';els.stick.style.top=y+'px'}els.stick.classList.add('on');stickMove(p,x,y);e.preventDefault();e.stopPropagation()}}
 function move(e){if(editing){editMove(e);return}const p=ptr.get(e.pointerId);if(!p)return;e.preventDefault();
  if(p.kind=='stick'){stickMove(p,e.clientX,e.clientY);return}
- const k=hitBtn(e.clientX,e.clientY);if(k&&k!==p.k){p.k=k;buzz();recompute()}}// slide between buttons
+ // slide between JUMP and SHOOT only (sliding onto LOCK/BLOCK/SWAP by accident froze the player)
+ if(p.k!='a'&&p.k!='x')return;const k=hitBtn(e.clientX,e.clientY,['a','x']);if(k&&k!==p.k){p.k=k;touchLatch[k]=1;buzz();recompute()}}
 function up(e){if(editing){editUp(e);return}const p=ptr.get(e.pointerId);if(!p)return;ptr.delete(e.pointerId);
- if(p.kind=='stick'){stick.id=null;stick.x=stick.y=0;els.knob.style.transform='translate(-50%,-50%)';els.stick.classList.remove('on');if(cfg.stickMode=='floating'){els.stick.style.left=cur.stick.x+'px';els.stick.style.top=cur.stick.y+'px'}}recompute()}
-function releaseAll(){ptr.clear();stick.id=null;stick.x=stick.y=0;if(els.knob)els.knob.style.transform='translate(-50%,-50%)';if(root)recompute()}
+ if(p.kind=='stick'){stick.id=null;stick.x=stick.y=0;kdx=kdy=0;els.knob.style.transform='translate(-50%,-50%)';els.stick.classList.remove('on');if(cfg.stickMode=='floating'){els.stick.style.left=cur.stick.x+'px';els.stick.style.top=cur.stick.y+'px'}}recompute()}
+function releaseAll(){ptr.clear();stick.id=null;for(const k in touchLatch)touchLatch[k]=0;kdx=kdy=0;if(els.stick)els.stick.classList.remove('on');stick.x=stick.y=0;if(els.knob)els.knob.style.transform='translate(-50%,-50%)';if(root)recompute()}
 // ---------- editor ----------
 const ed=new Map();let pinch=null;
 function pickAny(x,y){let best=null,bd=1e9;for(const k of IDS){const c=cur[k];const d=Math.hypot(x-c.x,y-c.y);if(d<Math.max(c.s/2*1.1,28)&&d<bd){bd=d;best=k}}return best}
@@ -99,7 +102,8 @@ function init(){root=document.getElementById('touch');if(!root)return;root.inner
  q('#tc-size').oninput=e=>setSize(sel,+e.target.value);q('#tc-op').oninput=e=>setOp(sel,e.target.value/100);
  q('#tc-reset').onclick=reset;q('#tc-done').onclick=()=>edit(false);q('#tc-min').onclick=()=>panel.classList.toggle('min');
  addEventListener('pointerdown',down,true);addEventListener('pointermove',move,{capture:true,passive:false});addEventListener('pointerup',up,true);addEventListener('pointercancel',up,true);
- addEventListener('blur',releaseAll);document.addEventListener('visibilitychange',releaseAll);
+ addEventListener('blur',releaseAll);addEventListener('pagehide',releaseAll);
+ document.addEventListener('touchend',e=>{if(!editing&&e.touches.length==0&&ptr.size)releaseAll()},true);document.addEventListener('touchcancel',e=>{if(!editing&&e.touches.length==0)releaseAll()},true);document.addEventListener('visibilitychange',releaseAll);
  // no browser gestures: scroll, pinch-zoom, double-tap zoom, long-press menus / text selection
  const inPanel=e=>e.target&&e.target.closest&&e.target.closest('#tcpanel');
  document.addEventListener('touchstart',e=>{if(!inPanel(e))e.preventDefault()},{passive:false});document.addEventListener('touchmove',e=>{if(!inPanel(e)||e.touches.length>1)e.preventDefault()},{passive:false});

@@ -114,7 +114,8 @@ const Run={
   // prone
   p.prone=p.on&&I.d&&!dx&&!lock;
   // jump / drop through
-  if(I._a&&p.on){if(I.d&&p.onPlat){p.drop=12;p.on=false;p.y+=2}else{p.vy=-4.7;p.on=false;AU.sfx('jump',{vol:0.35})}}
+  if(I._a)p.jbuf=6;else if(p.jbuf>0)p.jbuf--;if(p.on)p.coy=5;else if(p.coy>0)p.coy--;
+  if(p.jbuf>0&&(p.on||p.coy>0&&p.vy>=0)){p.jbuf=0;p.coy=0;if(I.d&&p.onPlat){p.drop=12;p.on=false;p.y+=2}else{p.vy=-4.7;p.on=false;p.onPlat=false;AU.sfx('jump',{vol:0.35})}}
   p.vx=(!lock&&!p.prone)?dx*1.3:0;
   // aim angle
   let ax=dx||0,ay=dy;if(!ax&&!ay)ax=p.face;if(p.on&&ay>0&&!ax)ax=p.face,ay=0;if(p.on&&ay>0&&ax&&!lock)ay=1;
